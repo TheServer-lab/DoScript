@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """
-DoScript v0.5.2 Interpreter
+DoScript v0.6 - CLI args + basic logging + error reporting
 
-Adds:
-- Recursive glob support using "**"
-- for_each <var>_in "<pattern>" with recursive option
-- for_each folder_in "<pattern>" (folders) and metadata injection
-- File metadata (size, timestamps, ext) and folder_is_empty
-- move/delete source resolution uses <var>_path when available (for recursive loops)
-
-Retains v0.5 features:
-- script_path add/remove/list, include, functions, macros (make a_command),
-  for_each literal lists, for_each_line, if_ends_with sugar, builtins, etc.
+Features:
+- arg1..arg32 read-only CLI arguments
+- --dry-run (no destructive actions)
+- --verbose (extra internal logs)
+- log / warn / error commands
+- full file/line error reporting
+- for_each <var>_in here / deep
+- file/folder metadata injection
+- macros/functions/includes/try/catch/for_each_line
 """
 
 import os
@@ -27,15 +26,20 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 # ----------------------------
-# Exceptions
+# Exceptions with context
 # ----------------------------
 class DoScriptError(Exception):
+    def __init__(self, message: str, file: Optional[str] = None, line: Optional[int] = None, source: Optional[str] = None):
+        super().__init__(message)
+        self.message = message
+        self.file = file
+        self.line = line
+        self.source = source
+
+class FileError(DoScriptError):
     pass
 
 class NetworkError(DoScriptError):
-    pass
-
-class FileError(DoScriptError):
     pass
 
 class ProcessError(DoScriptError):
@@ -45,21 +49,51 @@ class ProcessError(DoScriptError):
 # Interpreter
 # ----------------------------
 class DoScriptInterpreter:
-    def __init__(self):
-        # internal script path stack (LIFO)
+    def __init__(self, dry_run: bool = False, verbose: bool = False):
+        # runtime
         self.script_path_stack: List[str] = []
-        # variables
         self.global_vars: Dict[str, Any] = {}
         self.declared_globals: set = set()
-        # functions & macros
         self.functions: Dict[str, Dict[str, Any]] = {}
         self.macros: Dict[str, List[str]] = {}
-        # local scope for functions
         self.local_scope: Optional[Dict[str, Any]] = None
-        # included files tracker
         self.included_files: set = set()
-        # loop variable stack: stores variable name for each nested for_each
         self.loop_var_stack: List[str] = []
+        # flags
+        self.dry_run = dry_run
+        self.verbose = verbose
+        # execution context for error reporting
+        self.current_file: Optional[str] = None
+        self.current_line: Optional[int] = None
+        self.current_source: Optional[str] = None
+        # CLI args initialization (filled by CLI runner)
+        # populate arg1..arg32 with empty strings and mark as declared (read-only)
+        for i in range(1, 33):
+            name = f'arg{i}'
+            self.declared_globals.add(name)
+            self.global_vars[name] = ""
+
+    # ----------------------------
+    # Helpers: error / logging
+    # ----------------------------
+    def raise_error(self, exc_cls, message: str):
+        raise exc_cls(message, self.current_file, self.current_line, self.current_source)
+
+    def log_info(self, msg: str):
+        print(f"[INFO] {msg}")
+
+    def log_warn(self, msg: str):
+        print(f"[WARN] {msg}")
+
+    def log_error(self, msg: str):
+        print(f"[ERROR] {msg}")
+
+    def log_verbose(self, msg: str):
+        if self.verbose:
+            print(f"[VERBOSE] {msg}")
+
+    def log_dry(self, msg: str):
+        print(f"[DRY] {msg}")
 
     # ----------------------------
     # Path resolution
@@ -72,10 +106,9 @@ class DoScriptInterpreter:
         return path
 
     # ----------------------------
-    # String interpolation
+    # Interpolation
     # ----------------------------
     def interpolate_string(self, s: str) -> str:
-        # Replace escaped braces first
         s = s.replace(r'\{', '\x00').replace(r'\}', '\x01')
         def repl(m):
             name = m.group(1)
@@ -94,22 +127,26 @@ class DoScriptInterpreter:
         return s
 
     # ----------------------------
-    # Variables
+    # Variables (argN are read-only)
     # ----------------------------
     def get_variable(self, name: str) -> Any:
         if self.local_scope is not None and name in self.local_scope:
             return self.local_scope[name]
         if name in self.global_vars:
             return self.global_vars[name]
-        raise DoScriptError(f"Variable '{name}' is not defined")
+        self.raise_error(DoScriptError, f"Variable '{name}' is not defined")
 
     def set_variable(self, name: str, value: Any):
+        # protect argN read-only
+        if re.match(r'^arg([1-9]|[12]\d|3[0-2])$', name):
+            self.raise_error(DoScriptError, f"CLI argument '{name}' is read-only")
         if self.local_scope is not None and name in self.local_scope:
             self.local_scope[name] = value
-        elif name in self.declared_globals:
+            return
+        if name in self.declared_globals:
             self.global_vars[name] = value
-        else:
-            raise DoScriptError(f"Variable '{name}' used before declaration")
+            return
+        self.raise_error(DoScriptError, f"Variable '{name}' used before declaration")
 
     # ----------------------------
     # Expression evaluation (safe)
@@ -119,7 +156,7 @@ class DoScriptInterpreter:
         if not expr:
             return ""
 
-        # String literal (double-quoted -> escapes)
+        # String literal double-quoted -> decode escapes
         if (expr.startswith('"') and expr.endswith('"')) and len(expr) >= 2:
             inner = expr[1:-1]
             try:
@@ -131,126 +168,64 @@ class DoScriptInterpreter:
         if (expr.startswith("'") and expr.endswith("'")) and len(expr) >= 2:
             return self.interpolate_string(expr[1:-1])
 
-        # Booleans
+        # booleans
         if expr == 'true':
             return True
         if expr == 'false':
             return False
 
-        # Numbers
+        # numbers
         try:
             if '.' in expr:
                 return float(expr)
-            else:
-                return int(expr)
+            return int(expr)
         except ValueError:
             pass
 
-        # Function call pattern
-        func_call_match = re.match(r'^(\w+)\((.*)\)$', expr)
-        if func_call_match:
-            fname = func_call_match.group(1)
-            args_str = func_call_match.group(2).strip()
-            args = [a.strip() for a in self._split_args(args_str)] if args_str else []
-
-            # Builtins
-            if fname == 'exists':
-                if args:
-                    path_arg = self.evaluate_expression(args[0])
-                    return os.path.exists(self.resolve_path(str(path_arg)))
-                return False
-            if fname == 'date':
-                from datetime import datetime
-                return datetime.now().strftime('%Y-%m-%d')
-            if fname == 'time':
-                from datetime import datetime
-                return datetime.now().strftime('%H:%M:%S')
-            if fname == 'datetime':
-                from datetime import datetime
-                return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            if fname == 'extension':
-                if args:
-                    val = self.evaluate_expression(args[0])
-                    return os.path.splitext(str(val))[1]
-                return ""
-            if fname == 'substring':
-                vals = [self.evaluate_expression(a) for a in args]
-                if len(vals) >= 3:
-                    return str(vals[0])[int(vals[1]):int(vals[1])+int(vals[2])]
-                if len(vals) == 2:
-                    return str(vals[0])[int(vals[1]):]
-                return ""
-            if fname == 'replace':
-                vals = [self.evaluate_expression(a) for a in args]
-                if len(vals) >= 3:
-                    return str(vals[0]).replace(str(vals[1]), str(vals[2]))
-                return ""
-            if fname == 'length':
-                if args:
-                    return len(str(self.evaluate_expression(args[0])))
-                return 0
-            if fname == 'uppercase':
-                if args:
-                    return str(self.evaluate_expression(args[0])).upper()
-                return ""
-            if fname == 'lowercase':
-                if args:
-                    return str(self.evaluate_expression(args[0])).lower()
-                return ""
-            if fname == 'trim':
-                if args:
-                    return str(self.evaluate_expression(args[0])).strip()
-                return ""
-            if fname == 'contains':
-                vals = [self.evaluate_expression(a) for a in args]
-                if len(vals) >= 2:
-                    return str(vals[1]) in str(vals[0])
-                return False
-            if fname == 'startswith':
-                vals = [self.evaluate_expression(a) for a in args]
-                if len(vals) >= 2:
-                    return str(vals[0]).startswith(str(vals[1]))
-                return False
-            if fname == 'endswith':
-                vals = [self.evaluate_expression(a) for a in args]
-                if len(vals) >= 2:
-                    return str(vals[0]).endswith(str(vals[1]))
-                return False
+        # function call / builtins
+        m = re.match(r'^(\w+)\((.*)\)$', expr)
+        if m:
+            fname = m.group(1)
+            args_raw = m.group(2).strip()
+            args = [a.strip() for a in self._split_args(args_raw)] if args_raw else []
+            if fname == 'exists' and len(args) == 1:
+                return os.path.exists(self.resolve_path(self.evaluate_expression(args[0])))
+            if fname == 'extension' and len(args) == 1:
+                val = self.evaluate_expression(args[0])
+                return os.path.splitext(str(val))[1]
+            if fname == 'read_file' and len(args) == 1:
+                p = self.resolve_path(self.evaluate_expression(args[0]))
+                try:
+                    with open(p, 'r', encoding='utf-8') as f:
+                        return f.read()
+                except Exception as e:
+                    self.raise_error(FileError, f"read_file failed: {e}")
+            if fname == 'startswith' and len(args) == 2:
+                return str(self.evaluate_expression(args[0])).startswith(str(self.evaluate_expression(args[1])))
+            if fname == 'endswith' and len(args) == 2:
+                return str(self.evaluate_expression(args[0])).endswith(str(self.evaluate_expression(args[1])))
             if fname == 'split':
-                vals = [self.evaluate_expression(a) for a in args]
-                if len(vals) >= 2:
-                    return str(vals[0]).split(str(vals[1]))
-                if len(vals) == 1:
-                    return str(vals[0]).split()
+                if len(args) == 1:
+                    return str(self.evaluate_expression(args[0])).split()
+                if len(args) == 2:
+                    return str(self.evaluate_expression(args[0])).split(str(self.evaluate_expression(args[1])))
                 return []
-            if fname == 'read_file':
-                if args:
-                    p = self.resolve_path(str(self.evaluate_expression(args[0])))
-                    try:
-                        with open(p, 'r', encoding='utf-8') as f:
-                            return f.read()
-                    except Exception as e:
-                        raise FileError(f"Failed to read file '{p}': {e}")
-                return ""
-
-            # user-defined function
             if fname in self.functions:
                 evaluated_args = [self.evaluate_expression(a) for a in args]
                 return self.call_function(fname, evaluated_args)
+            self.raise_error(DoScriptError, f"Unknown function '{fname}'")
 
-            raise DoScriptError(f"Unknown function: {fname}")
-
-        # 'exists "path"' shorthand
+        # exists "path" shorthand
         exists_match = re.match(r'^exists\s+"([^"]+)"$', expr)
         if exists_match:
             path = exists_match.group(1)
             return os.path.exists(self.resolve_path(path))
 
-        # variable by name
+        # simple identifier
         if re.match(r'^\w+$', expr):
             return self.get_variable(expr)
 
-        # safe AST evaluation
+        # safe AST eval
         try:
             namespace = {'true': True, 'false': False, '__builtins__': {}}
             if self.local_scope:
@@ -261,18 +236,18 @@ class DoScriptInterpreter:
         except DoScriptError:
             raise
         except Exception as e:
-            raise DoScriptError(f"Failed to evaluate expression '{expr}': {e}")
+            self.raise_error(DoScriptError, f"Failed to evaluate '{expr}': {e}")
 
-    def _split_args(self, args_str: str) -> List[str]:
-        if not args_str:
+    def _split_args(self, s: str) -> List[str]:
+        if not s:
             return []
         parts = []
         cur = ''
         in_double = False
         in_single = False
         i = 0
-        while i < len(args_str):
-            c = args_str[i]
+        while i < len(s):
+            c = s[i]
             if c == '"' and not in_single:
                 in_double = not in_double
                 cur += c
@@ -289,117 +264,102 @@ class DoScriptInterpreter:
             parts.append(cur.strip())
         return parts
 
-    def _eval_node(self, node, namespace):
+    def _eval_node(self, node, ns):
         if isinstance(node, ast.Constant):
             return node.value
-        elif isinstance(node, ast.Name):
-            if node.id in namespace:
-                return namespace[node.id]
-            raise DoScriptError(f"Variable '{node.id}' not found")
-        elif isinstance(node, ast.BinOp):
-            left = self._eval_node(node.left, namespace)
-            right = self._eval_node(node.right, namespace)
-            ops = {
-                ast.Add: operator.add,
-                ast.Sub: operator.sub,
-                ast.Mult: operator.mul,
-                ast.Div: operator.truediv,
-                ast.Mod: operator.mod,
-            }
+        if isinstance(node, ast.Name):
+            if node.id in ns:
+                return ns[node.id]
+            self.raise_error(DoScriptError, f"Unknown name '{node.id}'")
+        if isinstance(node, ast.BinOp):
+            left = self._eval_node(node.left, ns)
+            right = self._eval_node(node.right, ns)
+            ops = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv, ast.Mod: operator.mod}
             if type(node.op) in ops:
                 return ops[type(node.op)](left, right)
-        elif isinstance(node, ast.UnaryOp):
-            operand = self._eval_node(node.operand, namespace)
+        if isinstance(node, ast.UnaryOp):
+            val = self._eval_node(node.operand, ns)
+            if isinstance(node.op, ast.USub):
+                return -val
             if isinstance(node.op, ast.Not):
-                return not operand
-            elif isinstance(node.op, ast.USub):
-                return -operand
-        elif isinstance(node, ast.Compare):
-            left = self._eval_node(node.left, namespace)
-            for op, comparator in zip(node.ops, node.comparators):
-                right = self._eval_node(comparator, namespace)
+                return not val
+        if isinstance(node, ast.Compare):
+            left = self._eval_node(node.left, ns)
+            for op, comp in zip(node.ops, node.comparators):
+                right = self._eval_node(comp, ns)
                 if isinstance(op, ast.Eq):
-                    if not (left == right):
-                        return False
+                    if not (left == right): return False
                 elif isinstance(op, ast.NotEq):
-                    if not (left != right):
-                        return False
+                    if not (left != right): return False
                 elif isinstance(op, ast.Lt):
-                    if not (left < right):
-                        return False
+                    if not (left < right): return False
                 elif isinstance(op, ast.Gt):
-                    if not (left > right):
-                        return False
+                    if not (left > right): return False
                 elif isinstance(op, ast.LtE):
-                    if not (left <= right):
-                        return False
+                    if not (left <= right): return False
                 elif isinstance(op, ast.GtE):
-                    if not (left >= right):
-                        return False
+                    if not (left >= right): return False
                 left = right
             return True
-        elif isinstance(node, ast.BoolOp):
+        if isinstance(node, ast.BoolOp):
             if isinstance(node.op, ast.And):
-                result = True
-                for value in node.values:
-                    result = result and self._eval_node(value, namespace)
-                    if not result:
-                        return False
+                for v in node.values:
+                    if not self._eval_node(v, ns): return False
                 return True
-            elif isinstance(node.op, ast.Or):
-                result = False
-                for value in node.values:
-                    result = result or self._eval_node(value, namespace)
-                    if result:
-                        return True
+            if isinstance(node.op, ast.Or):
+                for v in node.values:
+                    if self._eval_node(v, ns): return True
                 return False
-        raise DoScriptError(f"Unsupported expression type: {type(node).__name__}")
+        self.raise_error(DoScriptError, f"Unsupported AST node {type(node).__name__}")
 
     # ----------------------------
     # Function call
     # ----------------------------
     def call_function(self, name: str, args: List[Any]) -> Any:
         if name not in self.functions:
-            raise DoScriptError(f"Function '{name}' not defined")
-        func = self.functions[name]
-        params = func['params']
-        body = func['body']
-        old_local = self.local_scope
+            self.raise_error(DoScriptError, f"Function '{name}' not defined")
+        f = self.functions[name]
+        params = f['params']
+        body = f['body']
+        prev_local = self.local_scope
         self.local_scope = {}
         for i, p in enumerate(params):
             self.local_scope[p] = args[i] if i < len(args) else None
-        return_value = None
+        ret = None
         try:
-            for stmt in body:
-                result = self.execute_statement(stmt)
-                if result is not None and result[0] == 'return':
-                    return_value = result[1]
+            for s in body:
+                r = self._exec_statement(s)
+                if r is not None and r[0] == 'return':
+                    ret = r[1]
                     break
-                if result is not None and result[0] in ('break', 'continue'):
-                    raise DoScriptError(f"'{result[0]}' not allowed inside function")
+                if r is not None and r[0] in ('break','continue'):
+                    self.raise_error(DoScriptError, f"'{r[0]}' not valid inside function")
         finally:
-            self.local_scope = old_local
-        return return_value
+            self.local_scope = prev_local
+        return ret
 
     # ----------------------------
     # Parsing
     # ----------------------------
     def parse_script(self, filename: str) -> List[str]:
-        with open(filename, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-        statements: List[str] = []
-        current_line = ""
-        for line in lines:
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                raw = f.readlines()
+        except Exception as e:
+            self.raise_error(FileError, f"Failed to open script '{filename}': {e}")
+        out: List[str] = []
+        cur = ""
+        for line in raw:
             # remove comments
             line = re.sub(r'#.*$', '', line)
             line = re.sub(r'//.*$', '', line)
             line = line.rstrip('\n\r')
-            stripped = line.strip()
-            if stripped:
-                current_line += (" " + stripped) if current_line else stripped
-                statements.append(current_line)
-                current_line = ""
-        return statements
+            t = line.strip()
+            if t:
+                cur += (" " + t) if cur else t
+                out.append(cur)
+                cur = ""
+        return out
 
     def extract_string(self, s: str) -> str:
         s = s.strip()
@@ -440,20 +400,35 @@ class DoScriptInterpreter:
                     return i, block
             block.append(lines[i])
             i += 1
-        raise DoScriptError(f"Missing {end_keyword}")
+        self.raise_error(DoScriptError, f"Missing {end_keyword}")
 
     # ----------------------------
     # Execute single statement
     # ----------------------------
-    def execute_statement(self, stmt: str) -> Optional[Tuple[str, Any]]:
+    def _exec_statement(self, stmt: str) -> Optional[Tuple[str, Any]]:
         stmt = stmt.strip()
         if not stmt:
+            return None
+
+        # logging commands
+        if stmt.startswith('log '):
+            msg = self.evaluate_expression(stmt[4:].strip())
+            self.log_info(str(msg))
+            return None
+        if stmt.startswith('warn '):
+            msg = self.evaluate_expression(stmt[5:].strip())
+            self.log_warn(str(msg))
+            return None
+        if stmt.startswith('error '):
+            msg = self.evaluate_expression(stmt[6:].strip())
+            self.log_error(str(msg))
             return None
 
         # script_path
         if stmt.startswith('script_path add '):
             path = self.extract_string(stmt[16:])
             self.script_path_stack.append(os.path.abspath(path))
+            self.log_verbose(f"script_path added {path}")
             return None
         if stmt.startswith('script_path remove '):
             path = self.extract_string(stmt[19:])
@@ -466,23 +441,33 @@ class DoScriptInterpreter:
                 print(p)
             return None
 
-        # compatibility alias for old 'path' (warn)
+        # path (system PATH) - installer-style (must respect dry-run)
         if stmt.startswith('path add '):
-            print("Warning: 'path' is deprecated. Use 'script_path add'.", file=sys.stderr)
-            path = self.extract_string(stmt[9:])
-            self.script_path_stack.append(os.path.abspath(path))
+            p = self.extract_string(stmt[9:])
+            resolved = p
+            if self.dry_run:
+                self.log_dry(f"path add {resolved}")
+            else:
+                # Windows only support here: append to user PATH (simple approach)
+                if sys.platform == 'win32':
+                    try:
+                        # safe, minimal approach: modify environment variable for current process only
+                        # Real persistent modification would require registry edits which are dangerous;
+                        # for now, set user-level PATH would need winreg - keep simple and warn.
+                        self.log_info("path add on Windows requires admin/setup - skipping persistent change (use installer patterns).")
+                    except Exception as e:
+                        self.raise_error(ProcessError, f"path add failed: {e}")
+                else:
+                    # on unix-like systems, suggest manual instruction
+                    self.log_info("path add (persistent) is OS-specific; please add to your shell profile manually.")
             return None
         if stmt.startswith('path remove '):
-            print("Warning: 'path' is deprecated. Use 'script_path remove'.", file=sys.stderr)
-            path = self.extract_string(stmt[12:])
-            rp = os.path.abspath(path)
-            if rp in self.script_path_stack:
-                self.script_path_stack.remove(rp)
-            return None
-        if stmt == 'path list':
-            print("Warning: 'path' is deprecated. Use 'script_path list'.", file=sys.stderr)
-            for p in self.script_path_stack:
-                print(p)
+            p = self.extract_string(stmt[12:])
+            resolved = p
+            if self.dry_run:
+                self.log_dry(f"path remove {resolved}")
+            else:
+                self.log_info("path remove is OS-specific; interpreter won't modify persistent PATH automatically.")
             return None
 
         # include
@@ -493,9 +478,10 @@ class DoScriptInterpreter:
             if resolved in self.included_files:
                 return None
             if not os.path.exists(resolved):
-                raise FileError(f"Included file not found: '{file_path}'")
+                self.raise_error(FileError, f"Included file not found: {file_path}")
             self.included_files.add(resolved)
             lines = self.parse_script(resolved)
+            # execute included file with context
             self.execute_lines(lines)
             return None
 
@@ -503,10 +489,14 @@ class DoScriptInterpreter:
         if stmt.startswith('make folder '):
             path = self.extract_string(stmt[12:])
             resolved = os.path.abspath(self.resolve_path(path))
-            try:
-                os.makedirs(resolved, exist_ok=True)
-            except Exception as e:
-                raise FileError(f"Failed to create folder '{path}': {e}")
+            if self.dry_run:
+                self.log_dry(f"make folder {resolved}")
+            else:
+                try:
+                    os.makedirs(resolved, exist_ok=True)
+                    self.log_info(f"Created folder {resolved}")
+                except Exception as e:
+                    self.raise_error(FileError, f"Failed to create folder '{path}': {e}")
             return None
 
         # make file
@@ -526,80 +516,103 @@ class DoScriptInterpreter:
                 else:
                     content = str(self.evaluate_expression(content_expr))
                 resolved = os.path.abspath(self.resolve_path(path))
-                try:
-                    os.makedirs(os.path.dirname(resolved), exist_ok=True)
-                    with open(resolved, 'w', encoding='utf-8') as f:
-                        f.write(content)
-                except Exception as e:
-                    raise FileError(f"Failed to create file '{path}': {e}")
+                if self.dry_run:
+                    self.log_dry(f"make file {resolved} (len={len(content)})")
+                else:
+                    try:
+                        os.makedirs(os.path.dirname(resolved), exist_ok=True)
+                        with open(resolved, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                        self.log_info(f"Created file {resolved}")
+                    except Exception as e:
+                        self.raise_error(FileError, f"Failed to create file '{path}': {e}")
             return None
 
         # copy
         if ' to ' in stmt and stmt.startswith('copy '):
-            m = re.match(r'copy "([^"]+)" to "([^"]+)"$', stmt)
+            m = re.match(r'copy\s+(.+)\s+to\s+(.+)$', stmt)
             if m:
-                src, dst = m.groups()
-                src_resolved = os.path.abspath(self.resolve_path(src))
-                dst_resolved = os.path.abspath(self.resolve_path(dst))
-                try:
-                    os.makedirs(os.path.dirname(dst_resolved), exist_ok=True)
-                    shutil.copy2(src_resolved, dst_resolved)
-                except Exception as e:
-                    raise FileError(f"Failed to copy '{src}' to '{dst}': {e}")
+                src_tok = m.group(1).strip()
+                dst_tok = m.group(2).strip()
+                if (src_tok.startswith('"') and src_tok.endswith('"')) or (src_tok.startswith("'") and src_tok.endswith("'")):
+                    src = self.extract_string(src_tok)
+                else:
+                    varname = src_tok
+                    path_var = varname + '_path'
+                    if path_var in self.global_vars and self.global_vars[path_var]:
+                        src = self.global_vars[path_var]
+                    else:
+                        src = self.get_variable(varname)
+                dst = self.extract_string(dst_tok)
+                dst_interp = self.interpolate_if_needed(dst)
+                src_res = os.path.abspath(self.resolve_path(str(src)))
+                dst_res = os.path.abspath(self.resolve_path(dst_interp))
+                if self.dry_run:
+                    self.log_dry(f"copy {src_res} -> {dst_res}")
+                else:
+                    try:
+                        os.makedirs(os.path.dirname(dst_res), exist_ok=True)
+                        shutil.copy2(src_res, dst_res)
+                        self.log_info(f"Copied {src_res} -> {dst_res}")
+                    except Exception as e:
+                        self.raise_error(FileError, f"Failed to copy '{src}' to '{dst_interp}': {e}")
             return None
 
         # move
         if ' to ' in stmt and stmt.startswith('move '):
-            # support: move file to "exe/{file}"  OR move "C:/a.txt" to "b.txt"
             m = re.match(r'move\s+(.+)\s+to\s+(.+)$', stmt)
             if m:
                 src_tok = m.group(1).strip()
                 dst_tok = m.group(2).strip()
-                # evaluate src: if quoted string -> path literal; if unquoted -> variable
                 if (src_tok.startswith('"') and src_tok.endswith('"')) or (src_tok.startswith("'") and src_tok.endswith("'")):
                     src_path = self.extract_string(src_tok)
                 else:
-                    # variable name: prefer var + '_path' if exists, otherwise variable's value
                     varname = src_tok
                     path_var = varname + '_path'
-                    if path_var in self.global_vars:
+                    if path_var in self.global_vars and self.global_vars[path_var]:
                         src_path = self.global_vars[path_var]
                     else:
-                        # fallback to variable (which may be basename)
                         src_path = self.get_variable(varname)
-                # destination: extract and interpolate
                 dst_raw = self.extract_string(dst_tok)
                 dst_interp = self.interpolate_if_needed(dst_raw)
-                src_resolved = os.path.abspath(self.resolve_path(str(src_path)))
-                dst_resolved = os.path.abspath(self.resolve_path(dst_interp))
-                try:
-                    os.makedirs(os.path.dirname(dst_resolved), exist_ok=True)
-                    shutil.move(src_resolved, dst_resolved)
-                except Exception as e:
-                    raise FileError(f"Failed to move '{src_path}' to '{dst_interp}': {e}")
+                src_res = os.path.abspath(self.resolve_path(str(src_path)))
+                dst_res = os.path.abspath(self.resolve_path(dst_interp))
+                if self.dry_run:
+                    self.log_dry(f"move {src_res} -> {dst_res}")
+                else:
+                    try:
+                        os.makedirs(os.path.dirname(dst_res), exist_ok=True)
+                        shutil.move(src_res, dst_res)
+                        self.log_info(f"Moved {src_res} -> {dst_res}")
+                    except Exception as e:
+                        self.raise_error(FileError, f"Failed to move '{src_path}' to '{dst_interp}': {e}")
             return None
 
         # delete
         if stmt.startswith('delete '):
             path_expr = stmt[7:].strip()
-            # unquoted variable names preferred to be resolved from var_path if present
             if (path_expr.startswith('"') and path_expr.endswith('"')) or (path_expr.startswith("'") and path_expr.endswith("'")):
                 path = self.extract_string(path_expr)
             else:
                 varname = path_expr
                 path_var = varname + '_path'
-                if path_var in self.global_vars:
+                if path_var in self.global_vars and self.global_vars[path_var]:
                     path = self.global_vars[path_var]
                 else:
                     path = str(self.evaluate_expression(path_expr))
             resolved = os.path.abspath(self.resolve_path(path))
-            try:
-                if os.path.isdir(resolved):
-                    shutil.rmtree(resolved)
-                else:
-                    os.remove(resolved)
-            except Exception as e:
-                raise FileError(f"Failed to delete '{path}': {e}")
+            if self.dry_run:
+                self.log_dry(f"delete {resolved}")
+            else:
+                try:
+                    if os.path.isdir(resolved):
+                        shutil.rmtree(resolved)
+                        self.log_info(f"Deleted folder {resolved}")
+                    else:
+                        os.remove(resolved)
+                        self.log_info(f"Deleted file {resolved}")
+                except Exception as e:
+                    self.raise_error(FileError, f"Failed to delete '{path}': {e}")
             return None
 
         # download
@@ -608,11 +621,15 @@ class DoScriptInterpreter:
             if m:
                 url, path = m.groups()
                 resolved = os.path.abspath(self.resolve_path(path))
-                try:
-                    os.makedirs(os.path.dirname(resolved), exist_ok=True)
-                    urllib.request.urlretrieve(url, resolved)
-                except Exception as e:
-                    raise NetworkError(f"Failed to download '{url}': {e}")
+                if self.dry_run:
+                    self.log_dry(f"download {url} -> {resolved}")
+                else:
+                    try:
+                        os.makedirs(os.path.dirname(resolved), exist_ok=True)
+                        urllib.request.urlretrieve(url, resolved)
+                        self.log_info(f"Downloaded {url} -> {resolved}")
+                    except Exception as e:
+                        self.raise_error(NetworkError, f"Failed to download '{url}': {e}")
             return None
 
         # upload
@@ -621,13 +638,17 @@ class DoScriptInterpreter:
             if m:
                 path, url = m.groups()
                 resolved = os.path.abspath(self.resolve_path(path))
-                try:
-                    with open(resolved, 'rb') as f:
-                        data = f.read()
-                    req = urllib.request.Request(url, data=data, method='POST')
-                    urllib.request.urlopen(req)
-                except Exception as e:
-                    raise NetworkError(f"Failed to upload '{path}': {e}")
+                if self.dry_run:
+                    self.log_dry(f"upload {resolved} -> {url}")
+                else:
+                    try:
+                        with open(resolved, 'rb') as f:
+                            data = f.read()
+                        req = urllib.request.Request(url, data=data, method='POST')
+                        urllib.request.urlopen(req)
+                        self.log_info(f"Uploaded {resolved} -> {url}")
+                    except Exception as e:
+                        self.raise_error(NetworkError, f"Failed to upload '{path}': {e}")
             return None
 
         # ping
@@ -638,8 +659,9 @@ class DoScriptInterpreter:
                     subprocess.run(['ping', '-n', '1', host], check=True)
                 else:
                     subprocess.run(['ping', '-c', '1', host], check=True)
+                self.log_info(f"Pinged {host}")
             except Exception as e:
-                raise NetworkError(f"Failed to ping '{host}': {e}")
+                self.raise_error(NetworkError, f"Failed to ping '{host}': {e}")
             return None
 
         # run (macro or shell)
@@ -648,13 +670,14 @@ class DoScriptInterpreter:
             name = self.extract_string(token)
             if name in self.macros:
                 for s in self.macros[name]:
-                    self.execute_statement(s)
+                    self._exec_statement(s)
                 return None
             else:
                 try:
                     subprocess.run(name, shell=True, check=False)
+                    self.log_info(f"Ran shell: {name}")
                 except Exception as e:
-                    raise ProcessError(f"Failed to run '{name}': {e}")
+                    self.raise_error(ProcessError, f"Failed to run '{name}': {e}")
                 return None
 
         # capture
@@ -665,7 +688,7 @@ class DoScriptInterpreter:
                 result = subprocess.run(name, shell=True, capture_output=True, text=True)
                 return ('capture_output', result.stdout.strip())
             except Exception as e:
-                raise ProcessError(f"Failed to capture '{name}': {e}")
+                self.raise_error(ProcessError, f"Failed to capture '{name}': {e}")
 
         # exit
         if stmt.startswith('exit'):
@@ -676,7 +699,7 @@ class DoScriptInterpreter:
                 code = int(self.evaluate_expression(code_expr))
                 sys.exit(code)
 
-        # break / continue for loops
+        # break / continue
         if stmt == 'break':
             return ('break', None)
         if stmt == 'continue':
@@ -690,8 +713,9 @@ class DoScriptInterpreter:
                     subprocess.run(['taskkill', '/F', '/IM', proc_name], check=True)
                 else:
                     subprocess.run(['pkill', proc_name], check=True)
+                self.log_info(f"Killed process {proc_name}")
             except Exception as e:
-                raise ProcessError(f"Failed to kill '{proc_name}': {e}")
+                self.raise_error(ProcessError, f"Failed to kill '{proc_name}': {e}")
             return None
 
         # say
@@ -701,7 +725,7 @@ class DoScriptInterpreter:
             print(val)
             return None
 
-        # ask
+        # ask (interactive)
         if stmt.startswith('ask '):
             m = re.match(r'ask\s+(\w+)\s+(.+)$', stmt)
             if m:
@@ -709,7 +733,12 @@ class DoScriptInterpreter:
                 prompt_expr = m.group(2).strip()
                 prompt = str(self.evaluate_expression(prompt_expr))
                 ans = input(prompt + " ")
-                self.set_variable(var_name, ans)
+                # allow setting ask results to variables; declare if needed
+                if var_name not in self.declared_globals and self.local_scope is None:
+                    self.declared_globals.add(var_name)
+                    self.global_vars[var_name] = ans
+                else:
+                    self.set_variable(var_name, ans)
             return None
 
         # pause
@@ -734,10 +763,10 @@ class DoScriptInterpreter:
                     self.global_vars[n] = None
             return None
 
-        # local_variable (only inside functions)
+        # local_variable
         if stmt.startswith('local_variable = '):
             if self.local_scope is None:
-                raise DoScriptError("local_variable can only be used inside functions")
+                self.raise_error(DoScriptError, "local_variable can only be used inside functions")
             names = stmt[17:].split(',')
             for n in names:
                 n = n.strip()
@@ -753,21 +782,20 @@ class DoScriptInterpreter:
                 val = self.evaluate_expression(stmt[6:].strip())
                 return ('return', val)
 
-        # Assignment and special RHS handling
+        # assignment
         if '=' in stmt and not stmt.startswith(('if ', 'repeat ', 'loop ', 'for_each ', 'for_each_line ')):
             m = re.match(r'^(\w+)\s*=\s*(.+)$', stmt)
             if m:
                 var_name = m.group(1)
                 rhs = m.group(2).strip()
-                # run/capture special
                 if rhs.startswith('run '):
-                    res = self.execute_statement(rhs)
+                    res = self._exec_statement(rhs)
                     if res and res[0] == 'exit_code':
                         self.set_variable(var_name, res[1])
                     else:
                         self.set_variable(var_name, 0)
                 elif rhs.startswith('capture '):
-                    res = self.execute_statement(rhs)
+                    res = self._exec_statement(rhs)
                     if res and res[0] == 'capture_output':
                         self.set_variable(var_name, res[1])
                     else:
@@ -777,48 +805,23 @@ class DoScriptInterpreter:
                     self.set_variable(var_name, val)
             return None
 
-        # If none matched: no-op
-        return None
+        # nothing matched
+        self.raise_error(DoScriptError, f"Unknown statement: {stmt}")
 
     # ----------------------------
-    # Block execution (handles constructs)
-    # ----------------------------
-    def execute_block(self, lines: List[str], start_idx: int, end_keyword: str) -> Tuple[int, List[str]]:
-        block: List[str] = []
-        i = start_idx
-        depth = 1
-        start_keywords = {
-            'end_function': 'function',
-            'end_loop': 'loop',
-            'end_repeat': 'repeat',
-            'end_if': 'if',
-            'end_try': 'try',
-            'end_command': 'make a_command',
-            'end_for': 'for_each',
-        }
-        start_keyword = start_keywords.get(end_keyword, '')
-        while i < len(lines):
-            line = lines[i].strip()
-            if start_keyword and line.startswith(start_keyword):
-                depth += 1
-            elif line == end_keyword or line.startswith(end_keyword + ' '):
-                depth -= 1
-                if depth == 0:
-                    return i, block
-            block.append(lines[i])
-            i += 1
-        raise DoScriptError(f"Missing {end_keyword}")
-
-    # ----------------------------
-    # Top-level lines execution (supports nested blocks)
+    # Top-level block execution
     # ----------------------------
     def execute_lines(self, lines: List[str], start_idx: int = 0, end_idx: Optional[int] = None):
         if end_idx is None:
             end_idx = len(lines)
         i = start_idx
+        # lines is a list of statements; track real line numbers for error reporting
         while i < end_idx:
             stmt = lines[i].strip()
-
+            # set current position for error reporting
+            # +1 because lines are 0-indexed list constructed from parse_script
+            self.current_line = i + 1
+            self.current_source = stmt
             # function def
             if stmt.startswith('function '):
                 m = re.match(r'function\s+(\w+)\s*(.*)', stmt)
@@ -830,15 +833,15 @@ class DoScriptInterpreter:
                     i = end_i + 1
                     continue
 
-            # macro def: make a_command NAME
+            # macro def
             if stmt.startswith('make a_command '):
                 name = stmt[14:].strip()
                 end_i, body = self.execute_block(lines, i + 1, 'end_command')
                 self.macros[name] = body
                 i = end_i + 1
                 continue
-            # backward-compat: "make a command" (deprecated)
             if stmt.startswith('make a command '):
+                # backward compatibility (deprecated)
                 print("Warning: 'make a command' is deprecated. Use 'make a_command'.", file=sys.stderr)
                 name = stmt[15:].strip()
                 end_i, body = self.execute_block(lines, i + 1, 'end_command')
@@ -846,10 +849,9 @@ class DoScriptInterpreter:
                 i = end_i + 1
                 continue
 
-            # IF (normal explicit expression)
+            # IF
             if stmt.startswith('if '):
                 cond_expr = stmt[3:].strip()
-                # special explicit sugar: ends_with <expr> "suffix"
                 m = re.match(r'ends_with\s+(.+?)\s+("([^"]+)"|\'([^\']+)\')\s*$', cond_expr)
                 if m:
                     left_expr = m.group(1).strip()
@@ -857,8 +859,6 @@ class DoScriptInterpreter:
                     cond = self.evaluate_expression(f'endswith({left_expr}, "{suffix}")')
                 else:
                     cond = self.evaluate_expression(cond_expr)
-
-                # find else and end_if
                 depth = 1
                 else_idx = None
                 end_if_idx = None
@@ -876,7 +876,7 @@ class DoScriptInterpreter:
                             break
                     j += 1
                 if end_if_idx is None:
-                    raise DoScriptError("Missing end_if")
+                    self.raise_error(DoScriptError, "Missing end_if")
                 if cond:
                     block_end = else_idx if else_idx else end_if_idx
                     res = self.execute_lines(lines, i + 1, block_end)
@@ -890,7 +890,7 @@ class DoScriptInterpreter:
                 i = end_if_idx + 1
                 continue
 
-            # REPEAT
+            # repeat
             if stmt.startswith('repeat '):
                 count_expr = stmt[7:].strip()
                 count = int(self.evaluate_expression(count_expr))
@@ -899,12 +899,10 @@ class DoScriptInterpreter:
                     res = self.execute_lines(body, 0, len(body))
                     if res and res[0] == 'break':
                         break
-                    if res and res[0] == 'continue':
-                        continue
                 i = end_i + 1
                 continue
 
-            # LOOP
+            # loop
             if stmt.startswith('loop '):
                 loop_expr = stmt[5:].strip()
                 end_i, body = self.execute_block(lines, i + 1, 'end_loop')
@@ -922,12 +920,10 @@ class DoScriptInterpreter:
                         res = self.execute_lines(body, 0, len(body))
                         if res and res[0] == 'break':
                             break
-                        if res and res[0] == 'continue':
-                            continue
                 i = end_i + 1
                 continue
 
-            # TRY/CATCH
+            # try/catch
             if stmt == 'try':
                 catch_blocks = []
                 depth = 1
@@ -974,9 +970,7 @@ class DoScriptInterpreter:
                     j += 1
                 continue
 
-            # FOR_EACH - two syntaxes:
-            # 1) for_each var_in "pattern"  (supports recursive **)
-            # 2) for_each var in "a","b",...
+            # for_each (here/deep or list)
             if stmt.startswith('for_each ') and ('_in ' in stmt or ' in ' in stmt):
                 m_var_in = re.match(r'for_each\s+(\w+)_in\s+(.+)$', stmt)
                 m_var_list = None
@@ -984,146 +978,123 @@ class DoScriptInterpreter:
                     m_var_list = re.match(r'for_each\s+(\w+)\s+in\s+(.+)$', stmt)
                 if m_var_in:
                     var_name = m_var_in.group(1)
-                    pattern_token = m_var_in.group(2).strip()
-                    # pattern may be quoted or an expression
-                    if (pattern_token.startswith('"') and pattern_token.endswith('"')) or (pattern_token.startswith("'") and pattern_token.endswith("'")):
-                        pattern = self.extract_string(pattern_token)
+                    token = m_var_in.group(2).strip()
+                    if (token.startswith('"') and token.endswith('"')) or (token.startswith("'") and token.endswith("'")):
+                        pattern = self.extract_string(token)
+                        if pattern == '*' or pattern == '**':
+                            print("Warning: legacy '*' or '**' used; prefer 'here' or 'deep'.", file=sys.stderr)
                     else:
-                        pattern = str(self.evaluate_expression(pattern_token))
-
-                    # Determine if recursive (pattern contains ** or equals '**')
-                    is_recursive = ('**' in pattern) or (pattern.strip() == '**')
-
-                    matched_files: List[str] = []
-                    # Two possible modes: file iteration or folder iteration depending on caller intent.
-                    # We'll pick files by default; scripts intending folders should check for folder pattern or use folder_in variable name like 'folder'
-                    # But to support explicit folder iteration, if var name contains 'folder' or user intends folders (we'll allow for_each folder_in)
-                    resolved_pattern = self.resolve_path(pattern)
-                    if is_recursive:
-                        # If pattern is just '**' or contains '**', build recursive search rooted at script_path (or cwd)
-                        base = self.script_path_stack[-1] if self.script_path_stack else os.getcwd()
-                        # If pattern contains glob tokens beyond '**' use glob with recursive
-                        # Construct a recursive glob capturing all entries under base
-                        glob_pattern = resolved_pattern
-                        # If user gave just '**' treat as '**/*'
-                        if pattern.strip() == '**':
-                            glob_pattern = os.path.join(base, '**', '*')
-                        matched_all = glob.glob(glob_pattern, recursive=True)
-                    else:
-                        matched_all = glob.glob(resolved_pattern)
-
-                    # Now decide whether we are handling files or folders.
-                    # Convention: if var_name starts with 'folder' or 'dir' treat as folders, else treat as files.
+                        pattern = token
                     handle_folders = var_name.lower().startswith('folder') or var_name.lower().startswith('dir')
-
-                    if handle_folders:
-                        # keep only directories
-                        matched_files = [p for p in matched_all if os.path.isdir(p)]
+                    matched_paths: List[str] = []
+                    if pattern == 'here':
+                        base = self.script_path_stack[-1] if self.script_path_stack else os.getcwd()
+                        try:
+                            entries = [os.path.join(base, e) for e in os.listdir(base)]
+                        except Exception:
+                            entries = []
+                        if handle_folders:
+                            matched_paths = [p for p in entries if os.path.isdir(p)]
+                        else:
+                            matched_paths = [p for p in entries if os.path.isfile(p)]
+                    elif pattern == 'deep':
+                        base = self.script_path_stack[-1] if self.script_path_stack else os.getcwd()
+                        matched = []
+                        for root, dirs, files in os.walk(base):
+                            if handle_folders:
+                                for d in dirs:
+                                    matched.append(os.path.join(root, d))
+                            else:
+                                for f in files:
+                                    matched.append(os.path.join(root, f))
+                        matched_paths = matched
                     else:
-                        matched_files = [p for p in matched_all if os.path.isfile(p)]
-
+                        if pattern == '*' or pattern == '**':
+                            print("Warning: legacy glob used; prefer 'here' or 'deep'.", file=sys.stderr)
+                        resolved = self.resolve_path(pattern)
+                        if '**' in pattern:
+                            matched_all = glob.glob(resolved, recursive=True)
+                        else:
+                            matched_all = glob.glob(resolved)
+                        if handle_folders:
+                            matched_paths = [p for p in matched_all if os.path.isdir(p)]
+                        else:
+                            matched_paths = [p for p in matched_all if os.path.isfile(p)]
                     # ensure declared
                     if var_name not in self.declared_globals:
                         self.declared_globals.add(var_name)
                         self.global_vars[var_name] = None
-                    # extract body
                     end_i, body = self.execute_block(lines, i + 1, 'end_for')
-                    # push loop var for implicit if_ends_with
                     self.loop_var_stack.append(var_name)
                     try:
-                        for full_path in matched_files:
+                        for full_path in matched_paths:
                             full_abs = os.path.abspath(full_path)
                             basename = os.path.basename(full_abs)
-                            # populate variables:
-                            # primary var: keep previous behavior of basename for backwards compatibility
-                            # but also set var_name + '_path' to full absolute path
-                            # set var_name + '_name' to basename
-                            # also set var_name + '_' alias to basename for convenience (if user used that)
-                            # Timestamps and sizes for files; for folders we set folder_is_empty
-                            self.set_variable(var_name, basename)  # basename as simple var
-                            # also set alias with underscore, and path/name metadata
+                            # set primary var to basename
+                            self.set_variable(var_name, basename)
                             alias = var_name + '_'
+                            if alias not in self.declared_globals:
+                                self.declared_globals.add(alias)
+                                self.global_vars[alias] = None
+                            self.global_vars[alias] = basename
+                            # prepare metadata
+                            meta = {}
+                            meta[var_name + '_path'] = full_abs
+                            meta[var_name + '_name'] = basename
+                            meta[var_name + '_'] = basename
                             try:
-                                # if not declared, create alias in globals so user can use it
-                                if alias not in self.declared_globals:
-                                    self.declared_globals.add(alias)
-                                    self.global_vars[alias] = None
+                                st = os.stat(full_abs)
                             except Exception:
-                                pass
-                            # set actual metadata names (declare them if needed)
-                            meta_names = {}
-                            meta_names[var_name + '_path'] = full_abs
-                            meta_names[var_name + '_name'] = basename
-                            # file or folder specific metadata:
+                                st = None
                             if os.path.isfile(full_abs):
-                                try:
-                                    st = os.stat(full_abs)
-                                    size = int(st.st_size)
-                                    created = int(st.st_ctime)
-                                    modified = int(st.st_mtime)
-                                    accessed = int(st.st_atime)
-                                except Exception:
-                                    size = 0
-                                    created = modified = accessed = 0
-                                meta_names[var_name + '_ext'] = os.path.splitext(basename)[1]
-                                meta_names[var_name + '_size'] = size
-                                meta_names[var_name + '_size_kb'] = round(size / 1024, 3)
-                                meta_names[var_name + '_size_mb'] = round(size / (1024*1024), 3)
-                                meta_names[var_name + '_created'] = created
-                                meta_names[var_name + '_modified'] = modified
-                                meta_names[var_name + '_accessed'] = accessed
-                                meta_names[var_name + '_is_dir'] = False
-                                meta_names[var_name + '_'] = basename
+                                size = int(st.st_size) if st else 0
+                                created = int(st.st_ctime) if st else 0
+                                modified = int(st.st_mtime) if st else 0
+                                accessed = int(st.st_atime) if st else 0
+                                meta[var_name + '_ext'] = os.path.splitext(basename)[1]
+                                meta[var_name + '_size'] = size
+                                meta[var_name + '_size_kb'] = round(size / 1024, 3)
+                                meta[var_name + '_size_mb'] = round(size / (1024*1024), 3)
+                                meta[var_name + '_created'] = created
+                                meta[var_name + '_modified'] = modified
+                                meta[var_name + '_accessed'] = accessed
+                                meta[var_name + '_is_dir'] = False
+                                meta[var_name + '_is_empty'] = (size == 0)
                             elif os.path.isdir(full_abs):
-                                # folder metadata
-                                try:
-                                    st = os.stat(full_abs)
-                                    created = int(st.st_ctime)
-                                    modified = int(st.st_mtime)
-                                    accessed = int(st.st_atime)
-                                except Exception:
-                                    created = modified = accessed = 0
-                                # folder_is_empty check
+                                created = int(st.st_ctime) if st else 0
+                                modified = int(st.st_mtime) if st else 0
+                                accessed = int(st.st_atime) if st else 0
                                 try:
                                     is_empty = (len(os.listdir(full_abs)) == 0)
                                 except Exception:
                                     is_empty = False
-                                meta_names[var_name + '_is_empty'] = is_empty
-                                meta_names[var_name + '_created'] = created
-                                meta_names[var_name + '_modified'] = modified
-                                meta_names[var_name + '_accessed'] = accessed
-                                meta_names[var_name + '_path'] = full_abs
-                                meta_names[var_name + '_name'] = basename
-                                meta_names[var_name + '_'] = basename
-                                meta_names[var_name + '_is_dir'] = True
-                            # ensure metadata variables declared and set
-                            for k, v in meta_names.items():
+                                meta[var_name + '_is_empty'] = is_empty
+                                meta[var_name + '_created'] = created
+                                meta[var_name + '_modified'] = modified
+                                meta[var_name + '_accessed'] = accessed
+                                meta[var_name + '_is_dir'] = True
+                                meta[var_name + '_ext'] = ''
+                                meta[var_name + '_size'] = 0
+                                meta[var_name + '_size_kb'] = 0.0
+                                meta[var_name + '_size_mb'] = 0.0
+                            # inject metadata
+                            for k, v in meta.items():
                                 if k not in self.declared_globals:
                                     self.declared_globals.add(k)
                                     self.global_vars[k] = None
                                 self.global_vars[k] = v
-                            # also ensure alias var_name + '_' holds basename and declared
-                            if (var_name + '_') not in self.declared_globals:
-                                self.declared_globals.add(var_name + '_')
-                                self.global_vars[var_name + '_'] = basename
-                            else:
-                                self.global_vars[var_name + '_'] = basename
-
-                            # execute loop body (handle if_ends_with sugar implicitly)
+                            # execute body (handle if_ends_with sugar)
                             j = 0
                             while j < len(body):
                                 line = body[j].strip()
-                                # handle if_ends_with "<suffix>"
                                 if line.startswith('if_ends_with '):
                                     suffix_tok = line[len('if_ends_with '):].strip()
                                     suffix = self.extract_string(suffix_tok)
                                     current_var = self.loop_var_stack[-1] if self.loop_var_stack else None
                                     if current_var is None:
-                                        raise DoScriptError("if_ends_with used outside a for_each")
-                                    # use the basename for endswith check
+                                        self.raise_error(DoScriptError, "if_ends_with used outside for_each")
                                     val = self.global_vars.get(current_var + '_name', self.global_vars.get(current_var, ''))
                                     cond = str(val).endswith(suffix)
-                                    # collect inner until end_if
                                     inner = []
                                     k = j + 1
                                     while k < len(body):
@@ -1132,16 +1103,14 @@ class DoScriptInterpreter:
                                         inner.append(body[k])
                                         k += 1
                                     if k >= len(body):
-                                        raise DoScriptError("Missing end_if in if_ends_with block")
+                                        self.raise_error(DoScriptError, "Missing end_if in if_ends_with block")
                                     if cond:
                                         self.execute_lines(inner)
                                     j = k + 1
                                     continue
-                                # normal statement
-                                res = self.execute_statement(line)
+                                res = self._exec_statement(line)
                                 if res is not None and res[0] in ('break', 'continue', 'return'):
                                     if res[0] == 'break':
-                                        # break out of file iteration
                                         j = len(body)
                                         break
                                     if res[0] == 'continue':
@@ -1156,12 +1125,10 @@ class DoScriptInterpreter:
                 elif m_var_list:
                     var_name = m_var_list.group(1)
                     list_expr = m_var_list.group(2).strip()
-                    # split on commas while respecting quotes
                     items = []
                     parts = self._split_args(list_expr)
                     for p in parts:
                         items.append(self.evaluate_expression(p))
-                    # ensure declared
                     if var_name not in self.declared_globals:
                         self.declared_globals.add(var_name)
                         self.global_vars[var_name] = None
@@ -1201,24 +1168,29 @@ class DoScriptInterpreter:
                                 if res and res[0] == 'continue':
                                     continue
                     except Exception as e:
-                        raise FileError(f"Failed to read file '{file_str}': {e}")
+                        self.raise_error(FileError, f"Failed to read file '{file_str}': {e}")
                     i = end_i + 1
                     continue
 
-            # run / other statements handled by execute_statement
-            res = self.execute_statement(stmt)
+            # default
+            res = self._exec_statement(stmt)
             if res is not None:
-                if res[0] in ('return', 'break', 'continue'):
+                if res[0] in ('return','break','continue'):
                     return res
             i += 1
 
     # ----------------------------
-    # Public runner
+    # Runner
     # ----------------------------
     def run(self, filename: str):
+        # set current file BEFORE parsing/execution (for errors)
         if not os.path.exists(filename):
-            raise FileError(f"Script file not found: {filename}")
-        # push script dir into script_path so includes resolve
+            # set context then raise
+            self.current_file = filename
+            self.current_line = 0
+            self.current_source = ""
+            self.raise_error(FileError, f"Script file not found: {filename}")
+        self.current_file = os.path.abspath(filename)
         script_dir = os.path.abspath(os.path.dirname(filename))
         self.script_path_stack.append(script_dir)
         try:
@@ -1228,64 +1200,49 @@ class DoScriptInterpreter:
             if self.script_path_stack and self.script_path_stack[-1] == script_dir:
                 self.script_path_stack.pop()
 
-    # ----------------------------
-    # Helpers
-    # ----------------------------
-    def parse_script(self, filename: str) -> List[str]:
-        with open(filename, 'r', encoding='utf-8') as f:
-            raw = f.readlines()
-        out: List[str] = []
-        cur = ""
-        for line in raw:
-            line = re.sub(r'#.*$', '', line)
-            line = re.sub(r'//.*$', '', line)
-            line = line.rstrip('\n\r')
-            t = line.strip()
-            if t:
-                cur += (" " + t) if cur else t
-                out.append(cur)
-                cur = ""
-        return out
-
-    def _split_args(self, s: str) -> List[str]:
-        if not s:
-            return []
-        parts = []
-        cur = ''
-        in_double = False
-        in_single = False
-        i = 0
-        while i < len(s):
-            c = s[i]
-            if c == '"' and not in_single:
-                in_double = not in_double
-                cur += c
-            elif c == "'" and not in_double:
-                in_single = not in_single
-                cur += c
-            elif c == ',' and not in_double and not in_single:
-                parts.append(cur.strip())
-                cur = ''
-            else:
-                cur += c
-            i += 1
-        if cur.strip():
-            parts.append(cur.strip())
-        return parts
-
 # ----------------------------
 # CLI
 # ----------------------------
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python doscript_v0_5_2.py <script.do>")
+        print("Usage: python doscript_v0_6.py <script.do> [--dry-run] [--verbose] [args...]", file=sys.stderr)
         sys.exit(1)
-    script = sys.argv[1]
-    interp = DoScriptInterpreter()
+    argv = sys.argv[1:]
+    dry = False
+    verbose = False
+    # collect flags
+    normalized = []
+    for a in argv:
+        if a == '--dry-run':
+            dry = True
+        elif a == '--verbose':
+            verbose = True
+        else:
+            normalized.append(a)
+    if not normalized:
+        print("Error: no script provided", file=sys.stderr)
+        sys.exit(1)
+    script = normalized[0]
+    cli_args = normalized[1:]
+    interp = DoScriptInterpreter(dry_run=dry, verbose=verbose)
+    # populate arg1..arg32
+    for i in range(1, 33):
+        name = f'arg{i}'
+        value = cli_args[i-1] if i-1 < len(cli_args) else ""
+        interp.global_vars[name] = value
     try:
         interp.run(script)
     except DoScriptError as e:
-        print(f"DoScript Error: {e}", file=sys.stderr)
+        # pretty print error with context
+        header = f"DoScript {type(e).__name__}: {e.message}"
+        print(header, file=sys.stderr)
+        if e.file:
+            line_info = f"  in {e.file}"
+            if e.line:
+                line_info += f":{e.line}"
+            print(line_info, file=sys.stderr)
+        if e.source:
+            print(f"  → {e.source}", file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt:
         print("\nScript interrupted by user", file=sys.stderr)
