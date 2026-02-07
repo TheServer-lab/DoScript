@@ -2,6 +2,9 @@
 
 log "Starting Downloads sorter..."
 
+# --- Declare variables ---
+global_variable = downloads
+
 # --- CHANGE THIS PATH IF NEEDED ---
 downloads = "C:/Users/User/Downloads"
 
@@ -15,30 +18,24 @@ make folder "{downloads}/other"
 # --- Loop through all files recursively ---
 for_each file_in deep
 
-    # Only handle real files (skip folders)
     if file_is_dir == false
 
-        # --- EXE ---
         if_ends_with ".exe"
             move file to "{downloads}/exe/{file}"
         end_if
 
-        # --- ZIP / RAR / 7Z ---
         if file_ext == ".zip" or file_ext == ".rar" or file_ext == ".7z"
             move file to "{downloads}/zip/{file}"
         end_if
 
-        # --- Images ---
         if file_ext == ".png" or file_ext == ".jpg" or file_ext == ".jpeg" or file_ext == ".gif"
             move file to "{downloads}/images/{file}"
         end_if
 
-        # --- Documents ---
         if file_ext == ".pdf" or file_ext == ".docx" or file_ext == ".txt"
             move file to "{downloads}/docs/{file}"
         end_if
 
-        # --- Everything else ---
         if file_ext != ".exe" and file_ext != ".zip" and file_ext != ".rar" and file_ext != ".7z" and file_ext != ".png" and file_ext != ".jpg" and file_ext != ".jpeg" and file_ext != ".gif" and file_ext != ".pdf" and file_ext != ".docx" and file_ext != ".txt"
             move file to "{downloads}/other/{file}"
         end_if
