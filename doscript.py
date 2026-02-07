@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
 """
-DoScript Interpreter v0.5
+DoScript v0.5.2 Interpreter
 
-Features:
-- script_path add/remove/list (internal resolution)
-- include "file.do" with recursion protection
-- functions and macros (make a_command)
-- for_each <var>_in "<pattern>" (glob) and literal lists
-- for_each_line <var> in "file"
-- if_ends_with "<suffix>" (implicit loop var)
-- if ends_with <expr> "<suffix>" (explicit)
-- builtins including extension(), endswith(), startswith(), split(), read_file(), etc.
-- file/network/process operations
-- try/catch
-- variable scoping with global_variable/local_variable
+Adds:
+- Recursive glob support using "**"
+- for_each <var>_in "<pattern>" with recursive option
+- for_each folder_in "<pattern>" (folders) and metadata injection
+- File metadata (size, timestamps, ext) and folder_is_empty
+- move/delete source resolution uses <var>_path when available (for recursive loops)
+
+Retains v0.5 features:
+- script_path add/remove/list, include, functions, macros (make a_command),
+  for_each literal lists, for_each_line, if_ends_with sugar, builtins, etc.
 """
 
 import os
@@ -399,7 +397,6 @@ class DoScriptInterpreter:
             stripped = line.strip()
             if stripped:
                 current_line += (" " + stripped) if current_line else stripped
-                # treat line-oriented statements
                 statements.append(current_line)
                 current_line = ""
         return statements
@@ -446,8 +443,7 @@ class DoScriptInterpreter:
         raise DoScriptError(f"Missing {end_keyword}")
 
     # ----------------------------
-    # Execute single statement (commands, assignments, small control)
-    # Returns None or tuple like ('return', value) / ('break', None) / ('continue', None)
+    # Execute single statement
     # ----------------------------
     def execute_statement(self, stmt: str) -> Optional[Tuple[str, Any]]:
         stmt = stmt.strip()
@@ -559,12 +555,18 @@ class DoScriptInterpreter:
             if m:
                 src_tok = m.group(1).strip()
                 dst_tok = m.group(2).strip()
-                # evaluate src
+                # evaluate src: if quoted string -> path literal; if unquoted -> variable
                 if (src_tok.startswith('"') and src_tok.endswith('"')) or (src_tok.startswith("'") and src_tok.endswith("'")):
                     src_path = self.extract_string(src_tok)
                 else:
-                    # treat as variable name
-                    src_path = self.evaluate_expression(src_tok) if re.match(r'^["\']', src_tok) else self.get_variable(src_tok)
+                    # variable name: prefer var + '_path' if exists, otherwise variable's value
+                    varname = src_tok
+                    path_var = varname + '_path'
+                    if path_var in self.global_vars:
+                        src_path = self.global_vars[path_var]
+                    else:
+                        # fallback to variable (which may be basename)
+                        src_path = self.get_variable(varname)
                 # destination: extract and interpolate
                 dst_raw = self.extract_string(dst_tok)
                 dst_interp = self.interpolate_if_needed(dst_raw)
@@ -580,10 +582,16 @@ class DoScriptInterpreter:
         # delete
         if stmt.startswith('delete '):
             path_expr = stmt[7:].strip()
+            # unquoted variable names preferred to be resolved from var_path if present
             if (path_expr.startswith('"') and path_expr.endswith('"')) or (path_expr.startswith("'") and path_expr.endswith("'")):
                 path = self.extract_string(path_expr)
             else:
-                path = str(self.evaluate_expression(path_expr))
+                varname = path_expr
+                path_var = varname + '_path'
+                if path_var in self.global_vars:
+                    path = self.global_vars[path_var]
+                else:
+                    path = str(self.evaluate_expression(path_expr))
             resolved = os.path.abspath(self.resolve_path(path))
             try:
                 if os.path.isdir(resolved):
@@ -967,10 +975,9 @@ class DoScriptInterpreter:
                 continue
 
             # FOR_EACH - two syntaxes:
-            # 1) for_each var_in "pattern"
-            # 2) for_each var in "a", "b", "c"  (literal list)
+            # 1) for_each var_in "pattern"  (supports recursive **)
+            # 2) for_each var in "a","b",...
             if stmt.startswith('for_each ') and ('_in ' in stmt or ' in ' in stmt):
-                # Decide syntax
                 m_var_in = re.match(r'for_each\s+(\w+)_in\s+(.+)$', stmt)
                 m_var_list = None
                 if not m_var_in:
@@ -983,8 +990,38 @@ class DoScriptInterpreter:
                         pattern = self.extract_string(pattern_token)
                     else:
                         pattern = str(self.evaluate_expression(pattern_token))
+
+                    # Determine if recursive (pattern contains ** or equals '**')
+                    is_recursive = ('**' in pattern) or (pattern.strip() == '**')
+
+                    matched_files: List[str] = []
+                    # Two possible modes: file iteration or folder iteration depending on caller intent.
+                    # We'll pick files by default; scripts intending folders should check for folder pattern or use folder_in variable name like 'folder'
+                    # But to support explicit folder iteration, if var name contains 'folder' or user intends folders (we'll allow for_each folder_in)
                     resolved_pattern = self.resolve_path(pattern)
-                    matched_files = glob.glob(resolved_pattern)
+                    if is_recursive:
+                        # If pattern is just '**' or contains '**', build recursive search rooted at script_path (or cwd)
+                        base = self.script_path_stack[-1] if self.script_path_stack else os.getcwd()
+                        # If pattern contains glob tokens beyond '**' use glob with recursive
+                        # Construct a recursive glob capturing all entries under base
+                        glob_pattern = resolved_pattern
+                        # If user gave just '**' treat as '**/*'
+                        if pattern.strip() == '**':
+                            glob_pattern = os.path.join(base, '**', '*')
+                        matched_all = glob.glob(glob_pattern, recursive=True)
+                    else:
+                        matched_all = glob.glob(resolved_pattern)
+
+                    # Now decide whether we are handling files or folders.
+                    # Convention: if var_name starts with 'folder' or 'dir' treat as folders, else treat as files.
+                    handle_folders = var_name.lower().startswith('folder') or var_name.lower().startswith('dir')
+
+                    if handle_folders:
+                        # keep only directories
+                        matched_files = [p for p in matched_all if os.path.isdir(p)]
+                    else:
+                        matched_files = [p for p in matched_all if os.path.isfile(p)]
+
                     # ensure declared
                     if var_name not in self.declared_globals:
                         self.declared_globals.add(var_name)
@@ -995,9 +1032,84 @@ class DoScriptInterpreter:
                     self.loop_var_stack.append(var_name)
                     try:
                         for full_path in matched_files:
-                            # set variable to basename by default
-                            self.set_variable(var_name, os.path.basename(full_path))
-                            # execute body with special handling for if_ends_with
+                            full_abs = os.path.abspath(full_path)
+                            basename = os.path.basename(full_abs)
+                            # populate variables:
+                            # primary var: keep previous behavior of basename for backwards compatibility
+                            # but also set var_name + '_path' to full absolute path
+                            # set var_name + '_name' to basename
+                            # also set var_name + '_' alias to basename for convenience (if user used that)
+                            # Timestamps and sizes for files; for folders we set folder_is_empty
+                            self.set_variable(var_name, basename)  # basename as simple var
+                            # also set alias with underscore, and path/name metadata
+                            alias = var_name + '_'
+                            try:
+                                # if not declared, create alias in globals so user can use it
+                                if alias not in self.declared_globals:
+                                    self.declared_globals.add(alias)
+                                    self.global_vars[alias] = None
+                            except Exception:
+                                pass
+                            # set actual metadata names (declare them if needed)
+                            meta_names = {}
+                            meta_names[var_name + '_path'] = full_abs
+                            meta_names[var_name + '_name'] = basename
+                            # file or folder specific metadata:
+                            if os.path.isfile(full_abs):
+                                try:
+                                    st = os.stat(full_abs)
+                                    size = int(st.st_size)
+                                    created = int(st.st_ctime)
+                                    modified = int(st.st_mtime)
+                                    accessed = int(st.st_atime)
+                                except Exception:
+                                    size = 0
+                                    created = modified = accessed = 0
+                                meta_names[var_name + '_ext'] = os.path.splitext(basename)[1]
+                                meta_names[var_name + '_size'] = size
+                                meta_names[var_name + '_size_kb'] = round(size / 1024, 3)
+                                meta_names[var_name + '_size_mb'] = round(size / (1024*1024), 3)
+                                meta_names[var_name + '_created'] = created
+                                meta_names[var_name + '_modified'] = modified
+                                meta_names[var_name + '_accessed'] = accessed
+                                meta_names[var_name + '_is_dir'] = False
+                                meta_names[var_name + '_'] = basename
+                            elif os.path.isdir(full_abs):
+                                # folder metadata
+                                try:
+                                    st = os.stat(full_abs)
+                                    created = int(st.st_ctime)
+                                    modified = int(st.st_mtime)
+                                    accessed = int(st.st_atime)
+                                except Exception:
+                                    created = modified = accessed = 0
+                                # folder_is_empty check
+                                try:
+                                    is_empty = (len(os.listdir(full_abs)) == 0)
+                                except Exception:
+                                    is_empty = False
+                                meta_names[var_name + '_is_empty'] = is_empty
+                                meta_names[var_name + '_created'] = created
+                                meta_names[var_name + '_modified'] = modified
+                                meta_names[var_name + '_accessed'] = accessed
+                                meta_names[var_name + '_path'] = full_abs
+                                meta_names[var_name + '_name'] = basename
+                                meta_names[var_name + '_'] = basename
+                                meta_names[var_name + '_is_dir'] = True
+                            # ensure metadata variables declared and set
+                            for k, v in meta_names.items():
+                                if k not in self.declared_globals:
+                                    self.declared_globals.add(k)
+                                    self.global_vars[k] = None
+                                self.global_vars[k] = v
+                            # also ensure alias var_name + '_' holds basename and declared
+                            if (var_name + '_') not in self.declared_globals:
+                                self.declared_globals.add(var_name + '_')
+                                self.global_vars[var_name + '_'] = basename
+                            else:
+                                self.global_vars[var_name + '_'] = basename
+
+                            # execute loop body (handle if_ends_with sugar implicitly)
                             j = 0
                             while j < len(body):
                                 line = body[j].strip()
@@ -1008,9 +1120,10 @@ class DoScriptInterpreter:
                                     current_var = self.loop_var_stack[-1] if self.loop_var_stack else None
                                     if current_var is None:
                                         raise DoScriptError("if_ends_with used outside a for_each")
-                                    val = self.get_variable(current_var)
+                                    # use the basename for endswith check
+                                    val = self.global_vars.get(current_var + '_name', self.global_vars.get(current_var, ''))
                                     cond = str(val).endswith(suffix)
-                                    # gather inner until end_if
+                                    # collect inner until end_if
                                     inner = []
                                     k = j + 1
                                     while k < len(body):
@@ -1165,7 +1278,7 @@ class DoScriptInterpreter:
 # ----------------------------
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python doscript_v0_5.py <script.do>")
+        print("Usage: python doscript_v0_5_2.py <script.do>")
         sys.exit(1)
     script = sys.argv[1]
     interp = DoScriptInterpreter()
