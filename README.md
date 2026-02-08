@@ -27,7 +27,7 @@ safety in mind.
 
 ### Prebuilt EXE
 
-Copy `doscript.exe` to a folder on your **PATH** and run:
+Just Run the installer from the leatest realese.
 
 ``` bash
 do script.do
