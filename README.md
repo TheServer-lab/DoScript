@@ -1,4 +1,4 @@
-# DoScript --- Beginner-Friendly System Automation (v0.6)
+# DoScript --- Beginner-Friendly System Automation (v0.6.1)
 
 **DoScript** is a small, safe, human-readable scripting language for
 system automation --- think *Batch 2.0*: easy for beginners, powerful
