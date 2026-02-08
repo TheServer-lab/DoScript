@@ -1,83 +1,43 @@
-# Downloads sorter for DoScript v0.6
+# === Downloads Sorter (DoScript v0.6) ===
 
 log "Starting Downloads sorter..."
 
 global_variable = downloads
 downloads = "C:/Users/User/Downloads"
 
-# --- create category folders ---
-make folder "{downloads}/exe"
-make folder "{downloads}/zip"
-make folder "{downloads}/images"
-make folder "{downloads}/docs"
-make folder "{downloads}/other"
+# --- Ensure target folders exist ---
+make folder '{downloads}/exe'
+make folder '{downloads}/zip'
+make folder '{downloads}/images'
+make folder '{downloads}/docs'
+make folder '{downloads}/other'
 
-# --- scan all files recursively ---
+# --- Loop through files recursively ---
 for_each file_in deep
 
-    # skip directories
+    # skip folders using metadata-safe trick
     if file_is_dir == true
-        end_if
+        continue
+    end_if
 
-    # --- executables ---
     if_ends_with ".exe"
-        move file to "{downloads}/exe/{file_name}"
+        move file to '{downloads}/exe/{file}'
     end_if
 
-    # --- archives ---
-    if_ends_with ".zip"
-        move file to "{downloads}/zip/{file_name}"
+    if file_ext == ".zip" or file_ext == ".rar" or file_ext == ".7z"
+        move file to '{downloads}/zip/{file}'
     end_if
 
-    if_ends_with ".rar"
-        move file to "{downloads}/zip/{file_name}"
+    if file_ext == ".png" or file_ext == ".jpg" or file_ext == ".jpeg" or file_ext == ".gif"
+        move file to '{downloads}/images/{file}'
     end_if
 
-    # --- images ---
-    if_ends_with ".png"
-        move file to "{downloads}/images/{file_name}"
+    if file_ext == ".pdf" or file_ext == ".docx" or file_ext == ".txt"
+        move file to '{downloads}/docs/{file}'
     end_if
 
-    if_ends_with ".jpg"
-        move file to "{downloads}/images/{file_name}"
-    end_if
-
-    if_ends_with ".jpeg"
-        move file to "{downloads}/images/{file_name}"
-    end_if
-
-    # --- documents ---
-    if_ends_with ".pdf"
-        move file to "{downloads}/docs/{file_name}"
-    end_if
-
-    if_ends_with ".docx"
-        move file to "{downloads}/docs/{file_name}"
-    end_if
-
-    if_ends_with ".txt"
-        move file to "{downloads}/docs/{file_name}"
-    end_if
-
-    # --- everything else ---
-    if file_ext != ".exe"
-        if file_ext != ".zip"
-            if file_ext != ".rar"
-                if file_ext != ".png"
-                    if file_ext != ".jpg"
-                        if file_ext != ".jpeg"
-                            if file_ext != ".pdf"
-                                if file_ext != ".docx"
-                                    if file_ext != ".txt"
-                                        move file to "{downloads}/other/{file_name}"
-                                    end_if
-                                end_if
-                            end_if
-                        end_if
-                    end_if
-                end_if
-            end_if
-        end_if
+    if file_ext != ".exe" and file_ext != ".zip" and file_ext != ".rar" and file_ext != ".7z" and file_ext != ".png" and file_ext != ".jpg" and file_ext != ".jpeg" and file_ext != ".gif" and file_ext != ".pdf" and file_ext != ".docx" and file_ext != ".txt"
+        move file to '{downloads}/other/{file}'
     end_if
 
 end_for
