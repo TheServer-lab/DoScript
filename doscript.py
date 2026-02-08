@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
-DoScript v0.6 - CLI args + basic logging + error reporting
-Fixed: for_each body now executes full blocks (fixes unknown-statement errors inside for_each bodies)
+DoScript v0.6.1 - Added: time variables, JSON/CSV parsing, zip/unzip
+New features:
+- Built-in time variables (time, today, now, year, month, day, hour, minute, second)
+- JSON operations: json_read, json_write, json_get
+- CSV operations: csv_read, csv_write, csv_get
+- Archive operations: zip, unzip, zip_list
+- Added: update checker, open_link command, Windows shutdown command
 """
 
 import os
@@ -11,10 +16,40 @@ import glob
 import shutil
 import subprocess
 import urllib.request
+import urllib.error
 import ast
 import operator
-import time
+import time as time_module
+import json
+import csv
+import zipfile
+import webbrowser
 from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+
+# Current interpreter version
+VERSION = "0.6.1"
+
+# ----------------------------
+# Script Template
+# ----------------------------
+SCRIPT_TEMPLATE = '''# DoScript Automation Script
+# Created: {timestamp}
+# Description: Add your description here
+
+# Declare your variables
+global_variable = myVar
+
+# Your automation code here
+say "Script started!"
+
+# Example: Process files in current directory
+# for_each file_in here
+#     say "Found: {file_name}"
+# end_for
+
+say "Script completed!"
+'''
 
 # ----------------------------
 # Exceptions with context
@@ -35,6 +70,67 @@ class NetworkError(DoScriptError):
 
 class ProcessError(DoScriptError):
     pass
+
+class DataError(DoScriptError):
+    pass
+
+# ----------------------------
+# Update checker helper
+# ----------------------------
+def _to_raw_github(url: str) -> str:
+    """
+    Convert a github.com blob URL to raw.githubusercontent.com if possible.
+    Example:
+      https://github.com/owner/repo/blob/main/version.txt
+    -> https://raw.githubusercontent.com/owner/repo/main/version.txt
+    """
+    if 'github.com' in url and '/blob/' in url:
+        return url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
+    return url
+
+def check_for_updates(interp, version_url: str, repo_url: str, timeout: int = 5):
+    """
+    Check remote version file and if newer, prompt user to open repo_url.
+    Non-fatal on network errors (logs a verbose message).
+    """
+    raw_url = _to_raw_github(version_url)
+    try:
+        req = urllib.request.Request(raw_url, headers={'User-Agent': 'DoScript-Updater/1.0'})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            text = resp.read().decode('utf-8', errors='ignore').strip()
+            # try to find a version-like token in the response
+            m = re.search(r'(\d+\.\d+\.\d+)', text)
+            if m:
+                remote_ver = m.group(1)
+            else:
+                # if the file is just one-line, use stripped content
+                remote_ver = text.splitlines()[0].strip() if text else ''
+            if not remote_ver:
+                interp.log_verbose("Update check: couldn't parse remote version.")
+                return
+            def ver_tuple(v):
+                return tuple(int(x) for x in v.split('.') if x.isdigit())
+            try:
+                if ver_tuple(remote_ver) > ver_tuple(VERSION):
+                    # prompt user
+                    prompt = f"Update available: {VERSION} -> {remote_ver}. Open repository to update? (y/N): "
+                    ans = input(prompt).strip().lower()
+                    if ans in ('y','yes'):
+                        interp.log_info(f"Opening repository: {repo_url}")
+                        try:
+                            webbrowser.open(repo_url)
+                        except Exception as e:
+                            interp.log_error(f"Failed to open browser: {e}")
+                    else:
+                        interp.log_info("User chose not to open repository.")
+                else:
+                    interp.log_verbose(f"No update: remote {remote_ver} <= local {VERSION}")
+            except Exception as e:
+                interp.log_verbose(f"Version comparison failed: {e}")
+    except urllib.error.URLError as e:
+        interp.log_verbose(f"Update check failed (network): {e}")
+    except Exception as e:
+        interp.log_verbose(f"Update check failed: {e}")
 
 # ----------------------------
 # Interpreter
@@ -57,12 +153,38 @@ class DoScriptInterpreter:
         self.current_file: Optional[str] = None
         self.current_line: Optional[int] = None
         self.current_source: Optional[str] = None
+        
+        # Initialize time variables (read-only)
+        self._init_time_variables()
+        
         # CLI args initialization (filled by CLI runner)
         # populate arg1..arg32 with empty strings and mark as declared (read-only)
         for i in range(1, 33):
             name = f'arg{i}'
             self.declared_globals.add(name)
             self.global_vars[name] = ""
+
+    def _init_time_variables(self):
+        """Initialize built-in time variables"""
+        now = datetime.now()
+        timestamp = int(time_module.time())
+        
+        # Built-in time variables (read-only)
+        time_vars = {
+            'time': timestamp,                    # Unix timestamp
+            'today': now.strftime('%Y-%m-%d'),   # 2024-02-08-like
+            'now': now.strftime('%H:%M:%S'),     # 14:30:45-like
+            'year': now.year,
+            'month': now.month,
+            'day': now.day,
+            'hour': now.hour,
+            'minute': now.minute,
+            'second': now.second,
+        }
+        
+        for name, value in time_vars.items():
+            self.declared_globals.add(name)
+            self.global_vars[name] = value
 
     # ----------------------------
     # Helpers: error / logging
@@ -118,7 +240,7 @@ class DoScriptInterpreter:
         return s
 
     # ----------------------------
-    # Variables (argN are read-only)
+    # Variables (argN and time vars are read-only)
     # ----------------------------
     def get_variable(self, name: str) -> Any:
         if self.local_scope is not None and name in self.local_scope:
@@ -131,6 +253,11 @@ class DoScriptInterpreter:
         # protect argN read-only
         if re.match(r'^arg([1-9]|[12]\d|3[0-2])$', name):
             self.raise_error(DoScriptError, f"CLI argument '{name}' is read-only")
+        
+        # protect time variables (read-only)
+        if name in ('time', 'today', 'now', 'year', 'month', 'day', 'hour', 'minute', 'second'):
+            self.raise_error(DoScriptError, f"Built-in time variable '{name}' is read-only")
+        
         if self.local_scope is not None and name in self.local_scope:
             self.local_scope[name] = value
             return
@@ -414,6 +541,196 @@ class DoScriptInterpreter:
             msg = self.evaluate_expression(stmt[6:].strip())
             self.log_error(str(msg))
             return None
+
+        # JSON operations
+        if stmt.startswith('json_read '):
+            m = re.match(r'json_read\s+"([^"]+)"\s+to\s+(\w+)$', stmt)
+            if m:
+                filepath, varname = m.groups()
+                resolved = self.resolve_path(filepath)
+                try:
+                    with open(resolved, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    # Ensure variable is declared
+                    if varname not in self.declared_globals:
+                        self.declared_globals.add(varname)
+                        self.global_vars[varname] = None
+                    self.set_variable(varname, data)
+                    self.log_verbose(f"Loaded JSON from {resolved}")
+                except Exception as e:
+                    self.raise_error(DataError, f"Failed to read JSON from '{filepath}': {e}")
+                return None
+
+        if stmt.startswith('json_write '):
+            m = re.match(r'json_write\s+(\w+)\s+to\s+"([^"]+)"$', stmt)
+            if m:
+                varname, filepath = m.groups()
+                resolved = self.resolve_path(filepath)
+                data = self.get_variable(varname)
+                if self.dry_run:
+                    self.log_dry(f"json_write {varname} -> {resolved}")
+                else:
+                    try:
+                        os.makedirs(os.path.dirname(resolved) or '.', exist_ok=True)
+                        with open(resolved, 'w', encoding='utf-8') as f:
+                            json.dump(data, f, indent=2)
+                        self.log_info(f"Wrote JSON to {resolved}")
+                    except Exception as e:
+                        self.raise_error(DataError, f"Failed to write JSON to '{filepath}': {e}")
+                return None
+
+        if stmt.startswith('json_get '):
+            m = re.match(r'json_get\s+(\w+)\s+"([^"]+)"\s+to\s+(\w+)$', stmt)
+            if m:
+                source_var, key, dest_var = m.groups()
+                data = self.get_variable(source_var)
+                try:
+                    # Support dot notation for nested keys
+                    keys = key.split('.')
+                    value = data
+                    for k in keys:
+                        if isinstance(value, dict):
+                            value = value[k]
+                        elif isinstance(value, list):
+                            value = value[int(k)]
+                        else:
+                            self.raise_error(DataError, f"Cannot access key '{k}' in non-dict/list")
+                    
+                    if dest_var not in self.declared_globals:
+                        self.declared_globals.add(dest_var)
+                        self.global_vars[dest_var] = None
+                    self.set_variable(dest_var, value)
+                except (KeyError, IndexError, ValueError) as e:
+                    self.raise_error(DataError, f"Key '{key}' not found in {source_var}: {e}")
+                return None
+
+        # CSV operations
+        if stmt.startswith('csv_read '):
+            m = re.match(r'csv_read\s+"([^"]+)"\s+to\s+(\w+)$', stmt)
+            if m:
+                filepath, varname = m.groups()
+                resolved = self.resolve_path(filepath)
+                try:
+                    with open(resolved, 'r', encoding='utf-8', newline='') as f:
+                        reader = csv.DictReader(f)
+                        data = list(reader)
+                    
+                    if varname not in self.declared_globals:
+                        self.declared_globals.add(varname)
+                        self.global_vars[varname] = None
+                    self.set_variable(varname, data)
+                    self.log_verbose(f"Loaded CSV from {resolved} ({len(data)} rows)")
+                except Exception as e:
+                    self.raise_error(DataError, f"Failed to read CSV from '{filepath}': {e}")
+                return None
+
+        if stmt.startswith('csv_write '):
+            m = re.match(r'csv_write\s+(\w+)\s+to\s+"([^"]+)"$', stmt)
+            if m:
+                varname, filepath = m.groups()
+                resolved = self.resolve_path(filepath)
+                data = self.get_variable(varname)
+                if self.dry_run:
+                    self.log_dry(f"csv_write {varname} -> {resolved}")
+                else:
+                    try:
+                        if not isinstance(data, list) or not data:
+                            self.raise_error(DataError, "CSV data must be a non-empty list of dictionaries")
+                        
+                        os.makedirs(os.path.dirname(resolved) or '.', exist_ok=True)
+                        with open(resolved, 'w', encoding='utf-8', newline='') as f:
+                            fieldnames = data[0].keys()
+                            writer = csv.DictWriter(f, fieldnames=fieldnames)
+                            writer.writeheader()
+                            writer.writerows(data)
+                        self.log_info(f"Wrote CSV to {resolved} ({len(data)} rows)")
+                    except Exception as e:
+                        self.raise_error(DataError, f"Failed to write CSV to '{filepath}': {e}")
+                return None
+
+        if stmt.startswith('csv_get '):
+            m = re.match(r'csv_get\s+(\w+)\s+row\s+(\d+)\s+"([^"]+)"\s+to\s+(\w+)$', stmt)
+            if m:
+                source_var, row_str, column, dest_var = m.groups()
+                data = self.get_variable(source_var)
+                try:
+                    row_idx = int(row_str)
+                    if not isinstance(data, list) or row_idx >= len(data):
+                        self.raise_error(DataError, f"Row {row_idx} out of range")
+                    
+                    value = data[row_idx].get(column)
+                    if dest_var not in self.declared_globals:
+                        self.declared_globals.add(dest_var)
+                        self.global_vars[dest_var] = None
+                    self.set_variable(dest_var, value)
+                except (KeyError, ValueError) as e:
+                    self.raise_error(DataError, f"Failed to get CSV value: {e}")
+                return None
+
+        # ZIP operations
+        if stmt.startswith('zip ') and ' to ' in stmt:
+            m = re.match(r'zip\s+"([^"]+)"\s+to\s+"([^"]+)"$', stmt)
+            if m:
+                source, zipfile_path = m.groups()
+                source_resolved = self.resolve_path(source)
+                zip_resolved = self.resolve_path(zipfile_path)
+                
+                if self.dry_run:
+                    self.log_dry(f"zip {source_resolved} -> {zip_resolved}")
+                else:
+                    try:
+                        os.makedirs(os.path.dirname(zip_resolved) or '.', exist_ok=True)
+                        with zipfile.ZipFile(zip_resolved, 'w', zipfile.ZIP_DEFLATED) as zf:
+                            if os.path.isfile(source_resolved):
+                                zf.write(source_resolved, os.path.basename(source_resolved))
+                            elif os.path.isdir(source_resolved):
+                                for root, dirs, files in os.walk(source_resolved):
+                                    for file in files:
+                                        file_path = os.path.join(root, file)
+                                        arcname = os.path.relpath(file_path, os.path.dirname(source_resolved))
+                                        zf.write(file_path, arcname)
+                        self.log_info(f"Created archive {zip_resolved}")
+                    except Exception as e:
+                        self.raise_error(FileError, f"Failed to create zip '{zipfile_path}': {e}")
+                return None
+
+        if stmt.startswith('unzip '):
+            m = re.match(r'unzip\s+"([^"]+)"(?:\s+to\s+"([^"]+)")?$', stmt)
+            if m:
+                zipfile_path = m.group(1)
+                dest = m.group(2) if m.group(2) else '.'
+                zip_resolved = self.resolve_path(zipfile_path)
+                dest_resolved = self.resolve_path(dest)
+                
+                if self.dry_run:
+                    self.log_dry(f"unzip {zip_resolved} -> {dest_resolved}")
+                else:
+                    try:
+                        os.makedirs(dest_resolved, exist_ok=True)
+                        with zipfile.ZipFile(zip_resolved, 'r') as zf:
+                            zf.extractall(dest_resolved)
+                        self.log_info(f"Extracted {zip_resolved} to {dest_resolved}")
+                    except Exception as e:
+                        self.raise_error(FileError, f"Failed to unzip '{zipfile_path}': {e}")
+                return None
+
+        if stmt.startswith('zip_list '):
+            m = re.match(r'zip_list\s+"([^"]+)"\s+to\s+(\w+)$', stmt)
+            if m:
+                zipfile_path, varname = m.groups()
+                zip_resolved = self.resolve_path(zipfile_path)
+                try:
+                    with zipfile.ZipFile(zip_resolved, 'r') as zf:
+                        files = zf.namelist()
+                    
+                    if varname not in self.declared_globals:
+                        self.declared_globals.add(varname)
+                        self.global_vars[varname] = None
+                    self.set_variable(varname, files)
+                    self.log_verbose(f"Listed {len(files)} files from {zip_resolved}")
+                except Exception as e:
+                    self.raise_error(FileError, f"Failed to list zip '{zipfile_path}': {e}")
+                return None
 
         # script_path
         if stmt.startswith('script_path add '):
@@ -704,6 +1021,39 @@ class DoScriptInterpreter:
                 self.raise_error(ProcessError, f"Failed to kill '{proc_name}': {e}")
             return None
 
+        # shutdown (Windows-only)
+        if stmt.startswith('shutdown'):
+            args = stmt[len('shutdown'):].strip()
+            if sys.platform == 'win32':
+                if self.dry_run:
+                    self.log_dry("shutdown (Windows) - dry run")
+                else:
+                    try:
+                        # allow optional seconds like: shutdown 60
+                        if args and args.isdigit():
+                            subprocess.run(['shutdown', '/s', '/t', args], check=True)
+                        else:
+                            subprocess.run(['shutdown', '/s', '/t', '0'], check=True)
+                        self.log_info("Shutdown command executed (Windows).")
+                    except Exception as e:
+                        self.raise_error(ProcessError, f"Failed to shutdown Windows: {e}")
+            else:
+                self.raise_error(ProcessError, "shutdown command is only supported on Windows in this interpreter.")
+            return None
+
+        # open_link <url>
+        if stmt.startswith('open_link '):
+            link = self.extract_string(stmt[len('open_link '):])
+            if self.dry_run:
+                self.log_dry(f"open_link {link}")
+            else:
+                try:
+                    webbrowser.open(link)
+                    self.log_info(f"Opened link: {link}")
+                except Exception as e:
+                    self.raise_error(ProcessError, f"Failed to open link '{link}': {e}")
+            return None
+
         # say
         if stmt.startswith('say '):
             expr = stmt[4:].strip()
@@ -736,7 +1086,7 @@ class DoScriptInterpreter:
         if stmt.startswith('wait '):
             sec_expr = stmt[5:].strip()
             sec = float(self.evaluate_expression(sec_expr))
-            time.sleep(sec)
+            time_module.sleep(sec)
             return None
 
         # global_variable
@@ -793,6 +1143,23 @@ class DoScriptInterpreter:
 
         # nothing matched
         self.raise_error(DoScriptError, f"Unknown statement: {stmt}")
+
+    # ----------------------------
+    # Calculate file age
+    # ----------------------------
+    def calculate_file_age(self, timestamp: float) -> Dict[str, float]:
+        """Calculate how old a file is in various units"""
+        now = time_module.time()
+        age_seconds = now - timestamp
+        
+        return {
+            'seconds': age_seconds,
+            'minutes': age_seconds / 60,
+            'hours': age_seconds / 3600,
+            'days': age_seconds / 86400,
+            'months': age_seconds / (86400 * 30.44),  # Average month length
+            'years': age_seconds / (86400 * 365.25),  # Account for leap years
+        }
 
     # ----------------------------
     # Top-level block execution
@@ -1037,6 +1404,10 @@ class DoScriptInterpreter:
                                 created = int(st.st_ctime) if st else 0
                                 modified = int(st.st_mtime) if st else 0
                                 accessed = int(st.st_atime) if st else 0
+                                
+                                # Calculate file age based on modification time
+                                age_data = self.calculate_file_age(modified)
+                                
                                 meta[var_name + '_ext'] = os.path.splitext(basename)[1]
                                 meta[var_name + '_size'] = size
                                 meta[var_name + '_size_kb'] = round(size / 1024, 3)
@@ -1046,10 +1417,23 @@ class DoScriptInterpreter:
                                 meta[var_name + '_accessed'] = accessed
                                 meta[var_name + '_is_dir'] = False
                                 meta[var_name + '_is_empty'] = (size == 0)
+                                
+                                # Add age metadata
+                                meta[var_name + '_is_old_seconds'] = age_data['seconds']
+                                meta[var_name + '_is_old_minutes'] = age_data['minutes']
+                                meta[var_name + '_is_old_hours'] = age_data['hours']
+                                meta[var_name + '_is_old_days'] = age_data['days']
+                                meta[var_name + '_is_old_months'] = age_data['months']
+                                meta[var_name + '_is_old_years'] = age_data['years']
+                                
                             elif os.path.isdir(full_abs):
                                 created = int(st.st_ctime) if st else 0
                                 modified = int(st.st_mtime) if st else 0
                                 accessed = int(st.st_atime) if st else 0
+                                
+                                # Calculate folder age based on modification time
+                                age_data = self.calculate_file_age(modified)
+                                
                                 try:
                                     is_empty = (len(os.listdir(full_abs)) == 0)
                                 except Exception:
@@ -1063,6 +1447,15 @@ class DoScriptInterpreter:
                                 meta[var_name + '_size'] = 0
                                 meta[var_name + '_size_kb'] = 0.0
                                 meta[var_name + '_size_mb'] = 0.0
+                                
+                                # Add age metadata for folders too
+                                meta[var_name + '_is_old_seconds'] = age_data['seconds']
+                                meta[var_name + '_is_old_minutes'] = age_data['minutes']
+                                meta[var_name + '_is_old_hours'] = age_data['hours']
+                                meta[var_name + '_is_old_days'] = age_data['days']
+                                meta[var_name + '_is_old_months'] = age_data['months']
+                                meta[var_name + '_is_old_years'] = age_data['years']
+                                
                             # inject metadata
                             for k, v in meta.items():
                                 if k not in self.declared_globals:
@@ -1193,12 +1586,61 @@ class DoScriptInterpreter:
                 self.script_path_stack.pop()
 
 # ----------------------------
+# do_new command - create new script template
+# ----------------------------
+def create_new_script(location: str):
+    """Create a new DoScript template at the specified location"""
+    # Add .do extension if not present
+    if not location.endswith('.do'):
+        location += '.do'
+    
+    # Check if file already exists
+    if os.path.exists(location):
+        print(f"Error: File '{location}' already exists!", file=sys.stderr)
+        sys.exit(1)
+    
+    # Create directory if it doesn't exist
+    directory = os.path.dirname(location)
+    if directory and not os.path.exists(directory):
+        try:
+            os.makedirs(directory, exist_ok=True)
+        except Exception as e:
+            print(f"Error: Could not create directory '{directory}': {e}", file=sys.stderr)
+            sys.exit(1)
+    
+    # Generate template with current timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    template = SCRIPT_TEMPLATE.format(timestamp=timestamp)
+    
+    # Write template to file
+    try:
+        with open(location, 'w', encoding='utf-8') as f:
+            f.write(template)
+        print(f"✓ Created new DoScript at: {os.path.abspath(location)}")
+        print(f"  Edit your script and run with: python doscript.py {location}")
+    except Exception as e:
+        print(f"Error: Could not create script '{location}': {e}", file=sys.stderr)
+        sys.exit(1)
+
+# ----------------------------
 # CLI
 # ----------------------------
 def main():
+    # Check for do_new command first
+    if len(sys.argv) >= 2 and sys.argv[1] == 'do_new':
+        if len(sys.argv) < 3:
+            print("Usage: python doscript.py do_new <location>", file=sys.stderr)
+            print("Example: python doscript.py do_new my-script.do", file=sys.stderr)
+            sys.exit(1)
+        create_new_script(sys.argv[2])
+        return
+    
     if len(sys.argv) < 2:
-        print("Usage: python doscript_v0_6_fixed.py <script.do> [--dry-run] [--verbose] [args...]", file=sys.stderr)
+        print("Usage:", file=sys.stderr)
+        print("  python doscript.py <script.do> [--dry-run] [--verbose] [args...]", file=sys.stderr)
+        print("  python doscript.py do_new <location>  # Create a new script template", file=sys.stderr)
         sys.exit(1)
+    
     argv = sys.argv[1:]
     dry = False
     verbose = False
@@ -1217,6 +1659,18 @@ def main():
     script = normalized[0]
     cli_args = normalized[1:]
     interp = DoScriptInterpreter(dry_run=dry, verbose=verbose)
+
+    # --- Update checker: URL from your request ---
+    # The provided URL and repo link (as requested)
+    version_check_url = "https://github.com/TheServer-lab/DoScript/blob/main/version.txt"
+    repo_url = "https://github.com/TheServer-lab/DoScript"
+    # perform update check (non-fatal)
+    try:
+        check_for_updates(interp, version_check_url, repo_url, timeout=5)
+    except Exception as e:
+        # don't fail startup if update check errors out
+        interp.log_verbose(f"Update check raised exception: {e}")
+
     # populate arg1..arg32
     for i in range(1, 33):
         name = f'arg{i}'
