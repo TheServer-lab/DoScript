@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
 """
 DoScript v0.6 - CLI args + basic logging + error reporting
-
-Features:
-- arg1..arg32 read-only CLI arguments
-- --dry-run (no destructive actions)
-- --verbose (extra internal logs)
-- log / warn / error commands
-- full file/line error reporting
-- for_each <var>_in here / deep
-- file/folder metadata injection
-- macros/functions/includes/try/catch/for_each_line
+Fixed: for_each body now executes full blocks (fixes unknown-statement errors inside for_each bodies)
 """
 
 import os
@@ -350,7 +341,7 @@ class DoScriptInterpreter:
         out: List[str] = []
         cur = ""
         for line in raw:
-            # remove comments
+            # remove comments (note: simplistic - removes everything after # or //)
             line = re.sub(r'#.*$', '', line)
             line = re.sub(r'//.*$', '', line)
             line = line.rstrip('\n\r')
@@ -448,17 +439,12 @@ class DoScriptInterpreter:
             if self.dry_run:
                 self.log_dry(f"path add {resolved}")
             else:
-                # Windows only support here: append to user PATH (simple approach)
                 if sys.platform == 'win32':
                     try:
-                        # safe, minimal approach: modify environment variable for current process only
-                        # Real persistent modification would require registry edits which are dangerous;
-                        # for now, set user-level PATH would need winreg - keep simple and warn.
                         self.log_info("path add on Windows requires admin/setup - skipping persistent change (use installer patterns).")
                     except Exception as e:
                         self.raise_error(ProcessError, f"path add failed: {e}")
                 else:
-                    # on unix-like systems, suggest manual instruction
                     self.log_info("path add (persistent) is OS-specific; please add to your shell profile manually.")
             return None
         if stmt.startswith('path remove '):
@@ -1083,41 +1069,47 @@ class DoScriptInterpreter:
                                     self.declared_globals.add(k)
                                     self.global_vars[k] = None
                                 self.global_vars[k] = v
-                            # execute body (handle if_ends_with sugar)
-                            j = 0
-                            while j < len(body):
-                                line = body[j].strip()
-                                if line.startswith('if_ends_with '):
-                                    suffix_tok = line[len('if_ends_with '):].strip()
+
+                            # --- Execute body as a proper block (preserve if_ends_with sugar) ---
+                            transformed: List[str] = []
+                            p = 0
+                            while p < len(body):
+                                ln = body[p]
+                                stripped = ln.strip()
+                                if stripped.startswith('if_ends_with '):
+                                    suffix_tok = stripped[len('if_ends_with '):].strip()
                                     suffix = self.extract_string(suffix_tok)
                                     current_var = self.loop_var_stack[-1] if self.loop_var_stack else None
                                     if current_var is None:
                                         self.raise_error(DoScriptError, "if_ends_with used outside for_each")
-                                    val = self.global_vars.get(current_var + '_name', self.global_vars.get(current_var, ''))
-                                    cond = str(val).endswith(suffix)
-                                    inner = []
-                                    k = j + 1
-                                    while k < len(body):
-                                        if body[k].strip() == 'end_if':
+                                    cond_expr = f'endswith({current_var}_name, \"{suffix}\")'
+                                    inner_lines = []
+                                    q = p + 1
+                                    while q < len(body):
+                                        if body[q].strip() == 'end_if':
                                             break
-                                        inner.append(body[k])
-                                        k += 1
-                                    if k >= len(body):
+                                        inner_lines.append(body[q])
+                                        q += 1
+                                    if q >= len(body):
                                         self.raise_error(DoScriptError, "Missing end_if in if_ends_with block")
-                                    if cond:
-                                        self.execute_lines(inner)
-                                    j = k + 1
+                                    transformed.append(f'if {cond_expr}')
+                                    transformed.extend(inner_lines)
+                                    transformed.append('end_if')
+                                    p = q + 1
+                                else:
+                                    transformed.append(ln)
+                                    p += 1
+
+                            res = self.execute_lines(transformed, 0, len(transformed))
+                            if res is not None:
+                                if res[0] == 'break':
+                                    # break out of the file iteration loop
+                                    break
+                                if res[0] == 'continue':
+                                    # next file
                                     continue
-                                res = self._exec_statement(line)
-                                if res is not None and res[0] in ('break', 'continue', 'return'):
-                                    if res[0] == 'break':
-                                        j = len(body)
-                                        break
-                                    if res[0] == 'continue':
-                                        break
-                                    if res[0] == 'return':
-                                        return res
-                                j += 1
+                                if res[0] == 'return':
+                                    return res
                     finally:
                         self.loop_var_stack.pop()
                     i = end_i + 1
@@ -1205,7 +1197,7 @@ class DoScriptInterpreter:
 # ----------------------------
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python doscript_v0_6.py <script.do> [--dry-run] [--verbose] [args...]", file=sys.stderr)
+        print("Usage: python doscript_v0_6_fixed.py <script.do> [--dry-run] [--verbose] [args...]", file=sys.stderr)
         sys.exit(1)
     argv = sys.argv[1:]
     dry = False
