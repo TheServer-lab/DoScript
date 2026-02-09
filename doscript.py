@@ -1003,9 +1003,11 @@ class DoScriptInterpreter:
             if getattr(sys, 'frozen', False):
                 # Running as compiled executable (e.g., PyInstaller)
                 cmd = [sys.executable, script_resolved]
+                self.log_info(f"[FROZEN] Executing: {sys.executable} {script_resolved}")
             else:
                 # Running as Python script
                 cmd = [sys.executable, os.path.abspath(__file__), script_resolved]
+                self.log_info(f"[PYTHON] Executing: {sys.executable} {os.path.abspath(__file__)} {script_resolved}")
             
             # Add any additional arguments
             for arg in parts[1:]:
@@ -1016,6 +1018,7 @@ class DoScriptInterpreter:
                 self.log_dry(f"Would execute DoScript: {' '.join(cmd)}")
                 return None
             
+            self.log_info(f"Full command: {' '.join(cmd)}")
             self.log_verbose(f"Executing DoScript: {script_path}")
             try:
                 result = subprocess.run(cmd, check=True)
