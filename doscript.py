@@ -999,8 +999,13 @@ class DoScriptInterpreter:
             script_path = self.interpolate_if_needed(str(script_path))
             script_resolved = self.resolve_path(script_path)
             
-            # Build command
-            cmd = [sys.executable, os.path.abspath(__file__), script_resolved]
+            # Build command - detect if running as frozen executable
+            if getattr(sys, 'frozen', False):
+                # Running as compiled executable (e.g., PyInstaller)
+                cmd = [sys.executable, script_resolved]
+            else:
+                # Running as Python script
+                cmd = [sys.executable, os.path.abspath(__file__), script_resolved]
             
             # Add any additional arguments
             for arg in parts[1:]:
