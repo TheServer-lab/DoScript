@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-DoScript v0.6.1 - Added: time variables, JSON/CSV parsing, zip/unzip
-New features:
+DoScript v0.6.2 - Changed: do_new now executes scripts instead of creating templates
+Changes:
+- do_new: Execute a new DoScript instance (was template creator)
+- Template creation: Use 'make file script.do' and write your own content
+
+Previous version (0.6.1):
 - Built-in time variables (time, today, now, year, month, day, hour, minute, second)
 - JSON operations: json_read, json_write, json_get
 - CSV operations: csv_read, csv_write, csv_get
@@ -28,7 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
 # Current interpreter version
-VERSION = "0.6.1"
+VERSION = "0.6.2"
 
 # ----------------------------
 # Script Template
@@ -983,6 +987,40 @@ class DoScriptInterpreter:
                     self.raise_error(ProcessError, f"Failed to run '{name}': {e}")
                 return None
 
+        # do_new - execute a new DoScript instance
+        if stmt.startswith('do_new '):
+            rest = stmt[7:].strip()
+            parts = self._split_args(rest)
+            if not parts:
+                self.raise_error(DoScriptError, "do_new requires script path")
+            
+            script_expr = parts[0]
+            script_path = self.evaluate_expression(script_expr)
+            script_path = self.interpolate_if_needed(str(script_path))
+            script_resolved = self.resolve_path(script_path)
+            
+            # Build command
+            cmd = [sys.executable, os.path.abspath(__file__), script_resolved]
+            
+            # Add any additional arguments
+            for arg in parts[1:]:
+                arg_val = self.evaluate_expression(arg)
+                cmd.append(str(arg_val))
+            
+            if self.dry_run:
+                self.log_dry(f"Would execute DoScript: {' '.join(cmd)}")
+                return None
+            
+            self.log_verbose(f"Executing DoScript: {script_path}")
+            try:
+                result = subprocess.run(cmd, check=True)
+                self.log_verbose(f"DoScript completed with exit code {result.returncode}")
+            except subprocess.CalledProcessError as e:
+                self.raise_error(ProcessError, f"DoScript '{script_path}' failed with exit code {e.returncode}")
+            except Exception as e:
+                self.raise_error(ProcessError, f"Failed to execute DoScript '{script_path}': {e}")
+            return None
+
         # capture
         if stmt.startswith('capture '):
             token = stmt[8:].strip()
@@ -1586,59 +1624,15 @@ class DoScriptInterpreter:
                 self.script_path_stack.pop()
 
 # ----------------------------
-# do_new command - create new script template
-# ----------------------------
-def create_new_script(location: str):
-    """Create a new DoScript template at the specified location"""
-    # Add .do extension if not present
-    if not location.endswith('.do'):
-        location += '.do'
-    
-    # Check if file already exists
-    if os.path.exists(location):
-        print(f"Error: File '{location}' already exists!", file=sys.stderr)
-        sys.exit(1)
-    
-    # Create directory if it doesn't exist
-    directory = os.path.dirname(location)
-    if directory and not os.path.exists(directory):
-        try:
-            os.makedirs(directory, exist_ok=True)
-        except Exception as e:
-            print(f"Error: Could not create directory '{directory}': {e}", file=sys.stderr)
-            sys.exit(1)
-    
-    # Generate template with current timestamp
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    template = SCRIPT_TEMPLATE.format(timestamp=timestamp)
-    
-    # Write template to file
-    try:
-        with open(location, 'w', encoding='utf-8') as f:
-            f.write(template)
-        print(f"✓ Created new DoScript at: {os.path.abspath(location)}")
-        print(f"  Edit your script and run with: python doscript.py {location}")
-    except Exception as e:
-        print(f"Error: Could not create script '{location}': {e}", file=sys.stderr)
-        sys.exit(1)
-
-# ----------------------------
 # CLI
 # ----------------------------
 def main():
-    # Check for do_new command first
-    if len(sys.argv) >= 2 and sys.argv[1] == 'do_new':
-        if len(sys.argv) < 3:
-            print("Usage: python doscript.py do_new <location>", file=sys.stderr)
-            print("Example: python doscript.py do_new my-script.do", file=sys.stderr)
-            sys.exit(1)
-        create_new_script(sys.argv[2])
-        return
-    
     if len(sys.argv) < 2:
         print("Usage:", file=sys.stderr)
         print("  python doscript.py <script.do> [--dry-run] [--verbose] [args...]", file=sys.stderr)
-        print("  python doscript.py do_new <location>  # Create a new script template", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("To create a new script, use the 'make file' command inside a script:", file=sys.stderr)
+        print("  make file \"myscript.do\" \"say 'Hello World!'\"", file=sys.stderr)
         sys.exit(1)
     
     argv = sys.argv[1:]
