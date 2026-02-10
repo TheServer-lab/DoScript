@@ -1,15 +1,25 @@
 #!/usr/bin/env python3
 """
-DoScript v0.6.3 - Windows PATH Environment Variable Support
+DoScript v0.6.5 - Execute EXE files
 Changes:
-- path add: Now properly modifies Windows USER or SYSTEM PATH via registry
-- path remove: Now properly removes paths from Windows USER or SYSTEM PATH
-- Added --system flag for system-wide PATH modification (requires admin)
+- execute: Execute .exe files directly
+
+Previous version (0.6.4):
+- replace_in_file: Find and replace text in files
+- replace_regex_in_file: Regex-based find and replace
+- http_get, http_post, http_put, http_delete: HTTP request commands
+- random_number: Generate random integers
+- random_string: Generate random alphanumeric strings
+- random_choice: Pick random item from list
+- system_cpu, system_memory, system_disk: System resource monitoring
+
+Previous version (0.6.3):
+- path add/remove: Windows PATH environment variable support
+- Added --system flag for system-wide PATH modification
 - Broadcasts WM_SETTINGCHANGE to notify Windows of PATH changes
-- Critical for installer scripts that need to modify PATH
 
 Previous version (0.6.2):
-- do_new: Execute a new DoScript instance (was template creator)
+- do_new: Execute a new DoScript instance
 - Template creation: Use 'make file script.do' and write your own content
 
 Previous version (0.6.1):
@@ -35,11 +45,20 @@ import json
 import csv
 import zipfile
 import webbrowser
+import random
+import string
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
+# Try to import psutil for system info (optional)
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+
 # Current interpreter version
-VERSION = "0.6.3"
+VERSION = "0.6.5"
 
 # ----------------------------
 # Script Template
@@ -1125,6 +1144,27 @@ class DoScriptInterpreter:
                     self.raise_error(ProcessError, f"Failed to run '{name}': {e}")
                 return None
 
+        # execute - execute an exe file
+        if stmt.startswith('execute '):
+            exe_path = self.extract_string(stmt[8:].strip())
+            exe_resolved = self.resolve_path(exe_path)
+            
+            if self.dry_run:
+                self.log_dry(f"execute {exe_resolved}")
+            else:
+                try:
+                    if sys.platform == 'win32':
+                        # On Windows, execute the .exe file
+                        subprocess.run([exe_resolved], check=False)
+                        self.log_info(f"Executed: {exe_resolved}")
+                    else:
+                        # On Unix-like systems, try to execute it
+                        subprocess.run([exe_resolved], check=False)
+                        self.log_info(f"Executed: {exe_resolved}")
+                except Exception as e:
+                    self.raise_error(ProcessError, f"Failed to execute '{exe_path}': {e}")
+            return None
+
         # do_new - execute a new DoScript instance
         if stmt.startswith('do_new '):
             rest = stmt[7:].strip()
@@ -1237,6 +1277,271 @@ class DoScriptInterpreter:
                 except Exception as e:
                     self.raise_error(ProcessError, f"Failed to open link '{link}': {e}")
             return None
+
+        # replace_in_file - Find and replace text in files
+        if stmt.startswith('replace_in_file '):
+            m = re.match(r'replace_in_file\s+"([^"]+)"\s+"([^"]+)"\s+"([^"]+)"$', stmt)
+            if m:
+                filepath, search_text, replace_text = m.groups()
+                resolved = self.resolve_path(filepath)
+                
+                if self.dry_run:
+                    self.log_dry(f"replace_in_file {resolved}: '{search_text}' -> '{replace_text}'")
+                else:
+                    try:
+                        with open(resolved, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        
+                        count = content.count(search_text)
+                        new_content = content.replace(search_text, replace_text)
+                        
+                        with open(resolved, 'w', encoding='utf-8') as f:
+                            f.write(new_content)
+                        
+                        self.log_info(f"Replaced {count} occurrence(s) in {resolved}")
+                    except Exception as e:
+                        self.raise_error(FileError, f"Failed to replace in file '{filepath}': {e}")
+                return None
+
+        # replace_regex_in_file - Regex-based find and replace
+        if stmt.startswith('replace_regex_in_file '):
+            m = re.match(r'replace_regex_in_file\s+"([^"]+)"\s+"([^"]+)"\s+"([^"]+)"$', stmt)
+            if m:
+                filepath, pattern, replacement = m.groups()
+                resolved = self.resolve_path(filepath)
+                
+                if self.dry_run:
+                    self.log_dry(f"replace_regex_in_file {resolved}: pattern '{pattern}' -> '{replacement}'")
+                else:
+                    try:
+                        with open(resolved, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        
+                        regex = re.compile(pattern)
+                        matches = len(regex.findall(content))
+                        new_content = regex.sub(replacement, content)
+                        
+                        with open(resolved, 'w', encoding='utf-8') as f:
+                            f.write(new_content)
+                        
+                        self.log_info(f"Replaced {matches} regex match(es) in {resolved}")
+                    except Exception as e:
+                        self.raise_error(FileError, f"Failed to regex replace in file '{filepath}': {e}")
+                return None
+
+        # HTTP GET request
+        if stmt.startswith('http_get '):
+            m = re.match(r'http_get\s+"([^"]+)"\s+to\s+(\w+)$', stmt)
+            if m:
+                url, varname = m.groups()
+                
+                if self.dry_run:
+                    self.log_dry(f"http_get {url} -> {varname}")
+                else:
+                    try:
+                        req = urllib.request.Request(url, headers={'User-Agent': 'DoScript/1.0'})
+                        with urllib.request.urlopen(req, timeout=30) as response:
+                            data = response.read().decode('utf-8')
+                        
+                        if varname not in self.declared_globals:
+                            self.declared_globals.add(varname)
+                            self.global_vars[varname] = None
+                        self.set_variable(varname, data)
+                        self.log_info(f"HTTP GET from {url} (length: {len(data)} bytes)")
+                    except Exception as e:
+                        self.raise_error(NetworkError, f"HTTP GET failed for '{url}': {e}")
+                return None
+
+        # HTTP POST request
+        if stmt.startswith('http_post '):
+            m = re.match(r'http_post\s+"([^"]+)"\s+"([^"]+)"\s+to\s+(\w+)$', stmt)
+            if m:
+                url, data_str, varname = m.groups()
+                
+                if self.dry_run:
+                    self.log_dry(f"http_post {url} -> {varname}")
+                else:
+                    try:
+                        data = data_str.encode('utf-8')
+                        req = urllib.request.Request(url, data=data, method='POST',
+                                                     headers={'User-Agent': 'DoScript/1.0',
+                                                             'Content-Type': 'application/json'})
+                        with urllib.request.urlopen(req, timeout=30) as response:
+                            response_data = response.read().decode('utf-8')
+                        
+                        if varname not in self.declared_globals:
+                            self.declared_globals.add(varname)
+                            self.global_vars[varname] = None
+                        self.set_variable(varname, response_data)
+                        self.log_info(f"HTTP POST to {url} (response length: {len(response_data)} bytes)")
+                    except Exception as e:
+                        self.raise_error(NetworkError, f"HTTP POST failed for '{url}': {e}")
+                return None
+
+        # HTTP PUT request
+        if stmt.startswith('http_put '):
+            m = re.match(r'http_put\s+"([^"]+)"\s+"([^"]+)"\s+to\s+(\w+)$', stmt)
+            if m:
+                url, data_str, varname = m.groups()
+                
+                if self.dry_run:
+                    self.log_dry(f"http_put {url} -> {varname}")
+                else:
+                    try:
+                        data = data_str.encode('utf-8')
+                        req = urllib.request.Request(url, data=data, method='PUT',
+                                                     headers={'User-Agent': 'DoScript/1.0',
+                                                             'Content-Type': 'application/json'})
+                        with urllib.request.urlopen(req, timeout=30) as response:
+                            response_data = response.read().decode('utf-8')
+                        
+                        if varname not in self.declared_globals:
+                            self.declared_globals.add(varname)
+                            self.global_vars[varname] = None
+                        self.set_variable(varname, response_data)
+                        self.log_info(f"HTTP PUT to {url} (response length: {len(response_data)} bytes)")
+                    except Exception as e:
+                        self.raise_error(NetworkError, f"HTTP PUT failed for '{url}': {e}")
+                return None
+
+        # HTTP DELETE request
+        if stmt.startswith('http_delete '):
+            m = re.match(r'http_delete\s+"([^"]+)"\s+to\s+(\w+)$', stmt)
+            if m:
+                url, varname = m.groups()
+                
+                if self.dry_run:
+                    self.log_dry(f"http_delete {url} -> {varname}")
+                else:
+                    try:
+                        req = urllib.request.Request(url, method='DELETE',
+                                                     headers={'User-Agent': 'DoScript/1.0'})
+                        with urllib.request.urlopen(req, timeout=30) as response:
+                            response_data = response.read().decode('utf-8')
+                        
+                        if varname not in self.declared_globals:
+                            self.declared_globals.add(varname)
+                            self.global_vars[varname] = None
+                        self.set_variable(varname, response_data)
+                        self.log_info(f"HTTP DELETE from {url} (response length: {len(response_data)} bytes)")
+                    except Exception as e:
+                        self.raise_error(NetworkError, f"HTTP DELETE failed for '{url}': {e}")
+                return None
+
+        # random_number - Generate random integer
+        if stmt.startswith('random_number '):
+            m = re.match(r'random_number\s+(-?\d+)\s+(-?\d+)\s+to\s+(\w+)$', stmt)
+            if m:
+                min_val, max_val, varname = m.groups()
+                min_val = int(min_val)
+                max_val = int(max_val)
+                
+                num = random.randint(min_val, max_val)
+                
+                if varname not in self.declared_globals:
+                    self.declared_globals.add(varname)
+                    self.global_vars[varname] = None
+                self.set_variable(varname, num)
+                self.log_verbose(f"Generated random number: {num}")
+                return None
+
+        # random_string - Generate random alphanumeric string
+        if stmt.startswith('random_string '):
+            m = re.match(r'random_string\s+(\d+)\s+to\s+(\w+)$', stmt)
+            if m:
+                length, varname = m.groups()
+                length = int(length)
+                
+                chars = string.ascii_letters + string.digits
+                rand_str = ''.join(random.choice(chars) for _ in range(length))
+                
+                if varname not in self.declared_globals:
+                    self.declared_globals.add(varname)
+                    self.global_vars[varname] = None
+                self.set_variable(varname, rand_str)
+                self.log_verbose(f"Generated random string of length {length}")
+                return None
+
+        # random_choice - Pick random item from list
+        if stmt.startswith('random_choice '):
+            m = re.match(r'random_choice\s+(.+)\s+to\s+(\w+)$', stmt)
+            if m:
+                items_str, varname = m.groups()
+                items = [self.extract_string(item.strip()) for item in items_str.split(',')]
+                
+                if not items:
+                    self.raise_error(DoScriptError, "random_choice requires at least one item")
+                
+                choice = random.choice(items)
+                
+                if varname not in self.declared_globals:
+                    self.declared_globals.add(varname)
+                    self.global_vars[varname] = None
+                self.set_variable(varname, choice)
+                self.log_verbose(f"Randomly chose: {choice}")
+                return None
+
+        # system_cpu - Get CPU usage percentage
+        if stmt.startswith('system_cpu to '):
+            varname = stmt[14:].strip()
+            
+            if not HAS_PSUTIL:
+                self.raise_error(ProcessError, "system_cpu requires 'psutil' module. Install with: pip install psutil")
+            
+            try:
+                cpu_percent = psutil.cpu_percent(interval=1)
+                
+                if varname not in self.declared_globals:
+                    self.declared_globals.add(varname)
+                    self.global_vars[varname] = None
+                self.set_variable(varname, cpu_percent)
+                self.log_verbose(f"CPU usage: {cpu_percent}%")
+            except Exception as e:
+                self.raise_error(ProcessError, f"Failed to get CPU usage: {e}")
+            return None
+
+        # system_memory - Get memory usage percentage
+        if stmt.startswith('system_memory to '):
+            varname = stmt[17:].strip()
+            
+            if not HAS_PSUTIL:
+                self.raise_error(ProcessError, "system_memory requires 'psutil' module. Install with: pip install psutil")
+            
+            try:
+                mem = psutil.virtual_memory()
+                mem_percent = mem.percent
+                
+                if varname not in self.declared_globals:
+                    self.declared_globals.add(varname)
+                    self.global_vars[varname] = None
+                self.set_variable(varname, mem_percent)
+                self.log_verbose(f"Memory usage: {mem_percent}%")
+            except Exception as e:
+                self.raise_error(ProcessError, f"Failed to get memory usage: {e}")
+            return None
+
+        # system_disk - Get disk usage percentage for a path
+        if stmt.startswith('system_disk '):
+            m = re.match(r'system_disk\s+"([^"]+)"\s+to\s+(\w+)$', stmt)
+            if m:
+                path, varname = m.groups()
+                resolved = self.resolve_path(path)
+                
+                if not HAS_PSUTIL:
+                    self.raise_error(ProcessError, "system_disk requires 'psutil' module. Install with: pip install psutil")
+                
+                try:
+                    disk = psutil.disk_usage(resolved)
+                    disk_percent = disk.percent
+                    
+                    if varname not in self.declared_globals:
+                        self.declared_globals.add(varname)
+                        self.global_vars[varname] = None
+                    self.set_variable(varname, disk_percent)
+                    self.log_verbose(f"Disk usage for {resolved}: {disk_percent}%")
+                except Exception as e:
+                    self.raise_error(ProcessError, f"Failed to get disk usage for '{path}': {e}")
+                return None
 
         # say
         if stmt.startswith('say '):
