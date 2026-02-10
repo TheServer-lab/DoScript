@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """
-DoScript v0.6.2 - Changed: do_new now executes scripts instead of creating templates
+DoScript v0.6.3 - Windows PATH Environment Variable Support
 Changes:
+- path add: Now properly modifies Windows USER or SYSTEM PATH via registry
+- path remove: Now properly removes paths from Windows USER or SYSTEM PATH
+- Added --system flag for system-wide PATH modification (requires admin)
+- Broadcasts WM_SETTINGCHANGE to notify Windows of PATH changes
+- Critical for installer scripts that need to modify PATH
+
+Previous version (0.6.2):
 - do_new: Execute a new DoScript instance (was template creator)
 - Template creation: Use 'make file script.do' and write your own content
 
@@ -32,7 +39,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
 # Current interpreter version
-VERSION = "0.6.2"
+VERSION = "0.6.3"
 
 # ----------------------------
 # Script Template
@@ -755,26 +762,157 @@ class DoScriptInterpreter:
 
         # path (system PATH) - installer-style (must respect dry-run)
         if stmt.startswith('path add '):
-            p = self.extract_string(stmt[9:])
-            resolved = p
+            rest = stmt[9:].strip()
+            # Check for --system flag
+            use_system = False
+            if rest.startswith('--system '):
+                use_system = True
+                rest = rest[9:].strip()
+            
+            p = self.extract_string(rest)
+            resolved = os.path.abspath(self.resolve_path(p))
+            
             if self.dry_run:
-                self.log_dry(f"path add {resolved}")
+                scope = "SYSTEM" if use_system else "USER"
+                self.log_dry(f"path add [{scope}] {resolved}")
             else:
                 if sys.platform == 'win32':
                     try:
-                        self.log_info("path add on Windows requires admin/setup - skipping persistent change (use installer patterns).")
+                        import winreg
+                        
+                        # Choose registry key based on scope
+                        if use_system:
+                            key_path = r'SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+                            root_key = winreg.HKEY_LOCAL_MACHINE
+                            scope_name = "SYSTEM"
+                        else:
+                            key_path = r'Environment'
+                            root_key = winreg.HKEY_CURRENT_USER
+                            scope_name = "USER"
+                        
+                        # Open registry key
+                        key = winreg.OpenKey(root_key, key_path, 0, winreg.KEY_READ | winreg.KEY_WRITE)
+                        
+                        try:
+                            # Read current PATH
+                            current_path, _ = winreg.QueryValueEx(key, 'Path')
+                        except FileNotFoundError:
+                            current_path = ''
+                        
+                        # Split into components
+                        paths = [p.strip() for p in current_path.split(';') if p.strip()]
+                        
+                        # Add new path if not already present
+                        if resolved not in paths:
+                            paths.append(resolved)
+                            new_path = ';'.join(paths)
+                            
+                            # Write back to registry
+                            winreg.SetValueEx(key, 'Path', 0, winreg.REG_EXPAND_SZ, new_path)
+                            winreg.CloseKey(key)
+                            
+                            # Broadcast environment change
+                            try:
+                                import ctypes
+                                HWND_BROADCAST = 0xFFFF
+                                WM_SETTINGCHANGE = 0x001A
+                                SMTO_ABORTIFHUNG = 0x0002
+                                result = ctypes.c_long()
+                                SendMessageTimeoutW = ctypes.windll.user32.SendMessageTimeoutW
+                                SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, 'Environment', SMTO_ABORTIFHUNG, 5000, ctypes.byref(result))
+                            except:
+                                pass  # Broadcasting is optional
+                            
+                            self.log_info(f"Added to {scope_name} PATH: {resolved}")
+                        else:
+                            self.log_info(f"Path already in {scope_name} PATH: {resolved}")
+                            winreg.CloseKey(key)
+                        
+                    except PermissionError:
+                        self.raise_error(ProcessError, f"Permission denied. {'Administrator' if use_system else 'User'} rights required to modify PATH.")
                     except Exception as e:
-                        self.raise_error(ProcessError, f"path add failed: {e}")
+                        self.raise_error(ProcessError, f"Failed to add to PATH: {e}")
                 else:
-                    self.log_info("path add (persistent) is OS-specific; please add to your shell profile manually.")
+                    # Unix-like systems
+                    self.log_info("path add on Unix requires manual shell profile edit (~/.bashrc, ~/.zshrc, etc.)")
+                    self.log_info(f"Add this line: export PATH=\"$PATH:{resolved}\"")
             return None
+            
         if stmt.startswith('path remove '):
-            p = self.extract_string(stmt[12:])
-            resolved = p
+            rest = stmt[12:].strip()
+            # Check for --system flag
+            use_system = False
+            if rest.startswith('--system '):
+                use_system = True
+                rest = rest[9:].strip()
+            
+            p = self.extract_string(rest)
+            resolved = os.path.abspath(self.resolve_path(p))
+            
             if self.dry_run:
-                self.log_dry(f"path remove {resolved}")
+                scope = "SYSTEM" if use_system else "USER"
+                self.log_dry(f"path remove [{scope}] {resolved}")
             else:
-                self.log_info("path remove is OS-specific; interpreter won't modify persistent PATH automatically.")
+                if sys.platform == 'win32':
+                    try:
+                        import winreg
+                        
+                        # Choose registry key based on scope
+                        if use_system:
+                            key_path = r'SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+                            root_key = winreg.HKEY_LOCAL_MACHINE
+                            scope_name = "SYSTEM"
+                        else:
+                            key_path = r'Environment'
+                            root_key = winreg.HKEY_CURRENT_USER
+                            scope_name = "USER"
+                        
+                        # Open registry key
+                        key = winreg.OpenKey(root_key, key_path, 0, winreg.KEY_READ | winreg.KEY_WRITE)
+                        
+                        try:
+                            # Read current PATH
+                            current_path, _ = winreg.QueryValueEx(key, 'Path')
+                        except FileNotFoundError:
+                            current_path = ''
+                        
+                        # Split into components
+                        paths = [p.strip() for p in current_path.split(';') if p.strip()]
+                        
+                        # Remove the path if present
+                        if resolved in paths:
+                            paths.remove(resolved)
+                            new_path = ';'.join(paths)
+                            
+                            # Write back to registry
+                            winreg.SetValueEx(key, 'Path', 0, winreg.REG_EXPAND_SZ, new_path)
+                            winreg.CloseKey(key)
+                            
+                            # Broadcast environment change
+                            try:
+                                import ctypes
+                                HWND_BROADCAST = 0xFFFF
+                                WM_SETTINGCHANGE = 0x001A
+                                SMTO_ABORTIFHUNG = 0x0002
+                                result = ctypes.c_long()
+                                SendMessageTimeoutW = ctypes.windll.user32.SendMessageTimeoutW
+                                SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, 'Environment', SMTO_ABORTIFHUNG, 5000, ctypes.byref(result))
+                            except:
+                                pass  # Broadcasting is optional
+                            
+                            self.log_info(f"Removed from {scope_name} PATH: {resolved}")
+                        else:
+                            self.log_info(f"Path not found in {scope_name} PATH: {resolved}")
+                            winreg.CloseKey(key)
+                        
+                    except PermissionError:
+                        self.raise_error(ProcessError, f"Permission denied. {'Administrator' if use_system else 'User'} rights required to modify PATH.")
+                    except Exception as e:
+                        self.raise_error(ProcessError, f"Failed to remove from PATH: {e}")
+                else:
+                    # Unix-like systems
+                    self.log_info("path remove on Unix requires manual shell profile edit (~/.bashrc, ~/.zshrc, etc.)")
+                    self.log_info(f"Remove this from PATH: {resolved}")
             return None
 
         # include
