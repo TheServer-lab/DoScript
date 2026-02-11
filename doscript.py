@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DoScript v0.7.0 - Comprehensive String Operations
+DoScript v0.6.6 - Comprehensive String Operations
 Changes:
 - String case conversion: upper, lower, capitalize, title, swapcase
 - String trimming: trim, trim_left, trim_right, strip_prefix, strip_suffix
@@ -67,7 +67,7 @@ except ImportError:
     HAS_PSUTIL = False
 
 # Current interpreter version
-VERSION = "0.7.0"
+VERSION = "0.6.6"
 
 # ----------------------------
 # Script Template
