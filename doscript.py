@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
 """
-DoScript v0.6.5 - Execute EXE files
+DoScript v0.7.0 - Comprehensive String Operations
 Changes:
+- String case conversion: upper, lower, capitalize, title, swapcase
+- String trimming: trim, trim_left, trim_right, strip_prefix, strip_suffix
+- String search: contains, index_of, last_index_of, substr, char_at
+- String manipulation: replace, replace_first, reverse, repeat
+- String padding: pad_left, pad_right, center
+- String properties: length, is_empty, is_alpha, is_digit, is_alnum, is_lower, is_upper, is_space
+- String utilities: join, count_substr
+
+Previous version (0.6.5):
 - execute: Execute .exe files directly
 
 Previous version (0.6.4):
@@ -58,7 +67,7 @@ except ImportError:
     HAS_PSUTIL = False
 
 # Current interpreter version
-VERSION = "0.6.5"
+VERSION = "0.7.0"
 
 # ----------------------------
 # Script Template
@@ -358,6 +367,126 @@ class DoScriptInterpreter:
                 if len(args) == 2:
                     return str(self.evaluate_expression(args[0])).split(str(self.evaluate_expression(args[1])))
                 return []
+            
+            # String operations - case conversion
+            if fname == 'upper' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).upper()
+            if fname == 'lower' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).lower()
+            if fname == 'capitalize' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).capitalize()
+            if fname == 'title' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).title()
+            if fname == 'swapcase' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).swapcase()
+            
+            # String operations - trimming/stripping
+            if fname == 'trim' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).strip()
+            if fname == 'trim_left' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).lstrip()
+            if fname == 'trim_right' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).rstrip()
+            if fname == 'strip_prefix' and len(args) == 2:
+                s = str(self.evaluate_expression(args[0]))
+                prefix = str(self.evaluate_expression(args[1]))
+                return s[len(prefix):] if s.startswith(prefix) else s
+            if fname == 'strip_suffix' and len(args) == 2:
+                s = str(self.evaluate_expression(args[0]))
+                suffix = str(self.evaluate_expression(args[1]))
+                return s[:-len(suffix)] if s.endswith(suffix) else s
+            
+            # String operations - substring and search
+            if fname == 'substr' and len(args) >= 2:
+                s = str(self.evaluate_expression(args[0]))
+                start = int(self.evaluate_expression(args[1]))
+                if len(args) == 3:
+                    length = int(self.evaluate_expression(args[2]))
+                    return s[start:start+length]
+                return s[start:]
+            if fname == 'index_of' and len(args) == 2:
+                s = str(self.evaluate_expression(args[0]))
+                substr = str(self.evaluate_expression(args[1]))
+                return s.find(substr)
+            if fname == 'last_index_of' and len(args) == 2:
+                s = str(self.evaluate_expression(args[0]))
+                substr = str(self.evaluate_expression(args[1]))
+                return s.rfind(substr)
+            if fname == 'contains' and len(args) == 2:
+                s = str(self.evaluate_expression(args[0]))
+                substr = str(self.evaluate_expression(args[1]))
+                return substr in s
+            
+            # String operations - replacement and manipulation
+            if fname == 'replace' and len(args) == 3:
+                s = str(self.evaluate_expression(args[0]))
+                old = str(self.evaluate_expression(args[1]))
+                new = str(self.evaluate_expression(args[2]))
+                return s.replace(old, new)
+            if fname == 'replace_first' and len(args) == 3:
+                s = str(self.evaluate_expression(args[0]))
+                old = str(self.evaluate_expression(args[1]))
+                new = str(self.evaluate_expression(args[2]))
+                return s.replace(old, new, 1)
+            if fname == 'reverse' and len(args) == 1:
+                return str(self.evaluate_expression(args[0]))[::-1]
+            if fname == 'repeat' and len(args) == 2:
+                s = str(self.evaluate_expression(args[0]))
+                count = int(self.evaluate_expression(args[1]))
+                return s * count
+            
+            # String operations - padding and alignment
+            if fname == 'pad_left' and len(args) >= 2:
+                s = str(self.evaluate_expression(args[0]))
+                width = int(self.evaluate_expression(args[1]))
+                fillchar = str(self.evaluate_expression(args[2])) if len(args) == 3 else ' '
+                return s.rjust(width, fillchar[0] if fillchar else ' ')
+            if fname == 'pad_right' and len(args) >= 2:
+                s = str(self.evaluate_expression(args[0]))
+                width = int(self.evaluate_expression(args[1]))
+                fillchar = str(self.evaluate_expression(args[2])) if len(args) == 3 else ' '
+                return s.ljust(width, fillchar[0] if fillchar else ' ')
+            if fname == 'center' and len(args) >= 2:
+                s = str(self.evaluate_expression(args[0]))
+                width = int(self.evaluate_expression(args[1]))
+                fillchar = str(self.evaluate_expression(args[2])) if len(args) == 3 else ' '
+                return s.center(width, fillchar[0] if fillchar else ' ')
+            
+            # String operations - properties and checks
+            if fname == 'length' and len(args) == 1:
+                return len(str(self.evaluate_expression(args[0])))
+            if fname == 'is_empty' and len(args) == 1:
+                return len(str(self.evaluate_expression(args[0]))) == 0
+            if fname == 'is_alpha' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).isalpha()
+            if fname == 'is_digit' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).isdigit()
+            if fname == 'is_alnum' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).isalnum()
+            if fname == 'is_lower' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).islower()
+            if fname == 'is_upper' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).isupper()
+            if fname == 'is_space' and len(args) == 1:
+                return str(self.evaluate_expression(args[0])).isspace()
+            
+            # String operations - list/string conversion
+            if fname == 'join':
+                if len(args) == 2:
+                    items = self.evaluate_expression(args[0])
+                    sep = str(self.evaluate_expression(args[1]))
+                    if isinstance(items, list):
+                        return sep.join(str(x) for x in items)
+                    return str(items)
+                return ""
+            if fname == 'char_at' and len(args) == 2:
+                s = str(self.evaluate_expression(args[0]))
+                index = int(self.evaluate_expression(args[1]))
+                return s[index] if 0 <= index < len(s) else ""
+            if fname == 'count_substr' and len(args) == 2:
+                s = str(self.evaluate_expression(args[0]))
+                substr = str(self.evaluate_expression(args[1]))
+                return s.count(substr)
             if fname in self.functions:
                 evaluated_args = [self.evaluate_expression(a) for a in args]
                 return self.call_function(fname, evaluated_args)
