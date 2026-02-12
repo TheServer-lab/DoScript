@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DoScript Visual IDE - Blueprint Editor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            overflow: hidden;
+            background: #1a1a1a;
+        }
+
+        #app { display: flex; height: 100vh; width: 100vw; }
+
+        /* Library Panel */
+        #library {
+            width: 280px;
+            background: #2a2a2a;
+            border-right: 1px solid #444;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        #library-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #444;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: #2a2a2a;
+            z-index: 10;
+        }
+
+        #library-header h2 { color: #fff; font-size: 15px; font-weight: bold; }
+
+        #library-search {
+            width: 100%;
+            padding: 8px 10px;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 12px;
+            margin: 8px 0 0 0;
+        }
+        #library-search::placeholder { color: #666; }
+        #library-search:focus { outline: none; border-color: #3b82f6; }
+
+        .library-category { padding: 10px 12px; border-bottom: 1px solid #333; }
+
+        .library-category h3 {
+            color: #888;
+            font-size: 10px;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .command-btn {
+            width: 100%;
+            padding: 8px 10px;
+            margin-bottom: 3px;
+            background: #333;
+            border: none;
+            border-left: 3px solid;
+            border-radius: 4px;
+            color: #fff;
+            text-align: left;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .command-btn:hover { background: #3d3d3d; }
+        .command-name { font-weight: 500; font-size: 12px; }
+        .command-desc { font-size: 10px; color: #888; margin-top: 1px; }
+
+        /* Main Area */
+        #main { flex: 1; display: flex; flex-direction: column; background: #1a1a1a; min-width: 0; }
+
+        /* Toolbar */
+        #toolbar {
+            background: #2a2a2a;
+            border-bottom: 1px solid #444;
+            padding: 10px 12px;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .toolbar-btn {
+            padding: 7px 13px;
+            border: none;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+        .toolbar-btn:hover { opacity: 0.85; }
+        .btn-primary { background: #3b82f6; }
+        .btn-success { background: #10b981; }
+        .btn-purple { background: #8b5cf6; }
+        .btn-secondary { background: #444; }
+        .btn-danger { background: #ef4444; }
+
+        .spacer { flex: 1; }
+
+        .zoom-display { color: #aaa; font-size: 12px; margin-left: 4px; min-width: 42px; text-align: center; }
+
+        .pan-hint {
+            color: #555;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+
+        /* Canvas */
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: #1a1a1a;
+            cursor: default;
+        }
+
+        #canvas-container.panning { cursor: grabbing; }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        #connections-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        #nodes-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0;
+            height: 0;
+            z-index: 2;
+        }
+
+        /* Node */
+        .node {
+            position: absolute;
+            min-width: 200px;
+            max-width: 240px;
+            background: #2a2a2a;
+            border: 2px solid #444;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            cursor: move;
+            user-select: none;
+        }
+        .node.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+
+        .node-header {
+            padding: 9px 10px;
+            border-radius: 6px 6px 0 0;
+            color: #fff;
+            font-weight: 600;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .delete-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: #fff;
+            padding: 3px 7px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .delete-btn:hover { background: rgba(255,255,255,0.35); }
+
+        .node-body { padding: 10px; }
+
+        .node-input {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+
+        .input-port {
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            background: #fbbf24;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: transform 0.1s;
+            border: 2px solid #1a1a1a;
+        }
+        .input-port:hover { transform: scale(1.3); box-shadow: 0 0 8px rgba(251, 191, 36, 0.6); }
+
+        .node-input input {
+            flex: 1;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 5px 7px;
+            border-radius: 4px;
+            font-size: 11px;
+            min-width: 0;
+        }
+        .node-input input::placeholder { color: #666; }
+        .node-input input:focus { outline: none; border-color: #3b82f6; }
+
+        .node-outputs { border-top: 1px solid #444; padding: 10px; }
+
+        .node-output {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 6px;
+            margin-bottom: 5px;
+        }
+        .output-label { color: #aaa; font-size: 10px; }
+
+        .output-port {
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: transform 0.1s;
+            border: 2px solid #1a1a1a;
+        }
+        .output-port:hover { transform: scale(1.3); box-shadow: 0 0 8px rgba(59, 130, 246, 0.6); }
+        .output-port.exec { background: #10b981; }
+        .output-port.exec:hover { box-shadow: 0 0 8px rgba(16, 185, 129, 0.6); }
+
+        /* Code Preview */
+        #code-preview {
+            height: 240px;
+            background: #2a2a2a;
+            border-top: 1px solid #444;
+            display: none;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        #code-preview.visible { display: flex; }
+
+        #code-header {
+            padding: 10px 12px;
+            border-bottom: 1px solid #444;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #code-header h3 { color: #fff; font-size: 13px; font-weight: 600; }
+
+        #code-close {
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0 6px;
+        }
+        #code-content { flex: 1; overflow: auto; padding: 10px 12px; }
+        #code-content pre {
+            color: #4ade80;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        /* Connection styles */
+        .connection-line { stroke: #6366f1; stroke-width: 2.5; fill: none; }
+        .temp-connection { stroke: #818cf8; stroke-width: 2.5; fill: none; stroke-dasharray: 5, 5; }
+        .connection-line:hover { stroke: #818cf8; stroke-width: 3.5; }
+
+        /* Drop overlay */
+        #drop-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(59,130,246,0.12);
+            border: 3px dashed #3b82f6;
+            border-radius: 6px;
+            z-index: 999;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+        #drop-overlay.active { display: flex; }
+        #drop-overlay-text {
+            color: #3b82f6;
+            font-size: 22px;
+            font-weight: 700;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+            letter-spacing: 0.5px;
+        }
+
+        /* Load toast */
+        #load-toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: #fff;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 13px;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        #load-toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="library">
+            <div id="library-header">
+                <h2>Command Library</h2>
+            </div>
+            <div style="padding: 8px 12px; border-bottom: 1px solid #333;">
+                <input type="text" id="library-search" placeholder="🔍 Search commands...">
+            </div>
+            <div id="library-content"></div>
+        </div>
+
+        <div id="main">
+            <div id="toolbar">
+                <button class="toolbar-btn btn-primary" id="toggle-library">☰ Library</button>
+                <button class="toolbar-btn btn-success" id="generate-code">▶ Generate</button>
+                <button class="toolbar-btn btn-purple" id="download-code">⬇ Download .do</button>
+                <button class="toolbar-btn btn-primary" id="load-file-btn">📂 Load .do</button>
+                <input type="file" id="file-input" accept=".do,.txt" style="display:none">
+                <button class="toolbar-btn btn-secondary" id="clear-all">🗑 Clear</button>
+                <button class="toolbar-btn btn-secondary" id="reset-pan">⌖ Reset View</button>
+                <div class="spacer"></div>
+                <button class="toolbar-btn btn-secondary" id="zoom-out">−</button>
+                <span class="zoom-display" id="zoom-display">100%</span>
+                <button class="toolbar-btn btn-secondary" id="zoom-in">+</button>
+                <span class="pan-hint">Middle-drag or drag empty space to pan</span>
+            </div>
+
+            <div id="canvas-container">
+                <div id="canvas">
+                    <svg id="connections-svg"></svg>
+                    <div id="nodes-container"></div>
+                </div>
+                <div id="drop-overlay"><span id="drop-overlay-text">📂 Drop .do file to load</span></div>
+            </div>
+
+            <div id="code-preview">
+                <div id="code-header">
+                    <h3>Generated DoScript Code</h3>
+                    <button id="code-close">×</button>
+                </div>
+                <div id="code-content">
+                    <pre id="code-text"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="load-toast"></div>
+
+    <script>
+        // ============================
+        // Toast helper
+        // ============================
+        function showToast(msg, isError = false) {
+            const t = document.getElementById('load-toast');
+            t.textContent = msg;
+            t.style.borderColor = isError ? '#ef4444' : '#334155';
+            t.style.color = isError ? '#fca5a5' : '#fff';
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 3200);
+        }
+
+        // ============================
+        // Script Parser → Nodes
+        // ============================
+        function buildCommandLookup() {
+            const map = new Map();
+            for (const cmds of Object.values(COMMAND_LIBRARY)) {
+                for (const cmd of cmds) {
+                    map.set(cmd.name.toLowerCase(), cmd);
+                    const firstWord = cmd.name.split(' ')[0].toLowerCase();
+                    if (!map.has(firstWord)) map.set(firstWord, cmd);
+                }
+            }
+            return map;
+        }
+
+        function tokenize(line) {
+            const tokens = [];
+            let cur = '';
+            let inQ = false;
+            let qc = '';
+            for (let i = 0; i < line.length; i++) {
+                const c = line[i];
+                if (inQ) {
+                    if (c === qc) { tokens.push(cur); cur = ''; inQ = false; }
+                    else cur += c;
+                } else if (c === '"' || c === "'") {
+                    inQ = true; qc = c;
+                } else if (c === ' ' || c === '\t') {
+                    if (cur) { tokens.push(cur); cur = ''; }
+                } else { cur += c; }
+            }
+            if (cur) tokens.push(cur);
+            return tokens;
+        }
+
+        function parseScriptToNodes(text) {
+            // lookup built lazily once COMMAND_LIBRARY is defined
+            const lookup = buildCommandLookup();
+            const rawLines = text.split('\n');
+            const parsedNodes = [];
+            parsedNodes.push({ type: 'start', inputs: {} });
+
+            for (let raw of rawLines) {
+                const line = raw.trim();
+                if (!line || line.startsWith('#')) continue;
+
+                const tokens = tokenize(line);
+                if (!tokens.length) continue;
+
+                // Try matching progressively longer keyword phrases (up to 3 words)
+                let matchedCmd = null;
+                for (let w = Math.min(tokens.length, 3); w >= 1; w--) {
+                    const phrase = tokens.slice(0, w).join(' ').toLowerCase();
+                    if (lookup.has(phrase)) { matchedCmd = lookup.get(phrase); break; }
+                }
+
+                // Assignment (var = value) with no matched command
+                if (!matchedCmd && line.includes('=') && /^\w+\s*=/.test(line)) {
+                    const eqIdx = line.indexOf('=');
+                    const varName = line.slice(0, eqIdx).trim();
+                    const value = line.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '');
+                    parsedNodes.push({ type: 'assign', inputs: { variable: varName, value }, color: '#14b8a6', outputs: ['exec'] });
+                    continue;
+                }
+
+                if (!matchedCmd) {
+                    // Fallback: show the raw line as a comment-style say
+                    parsedNodes.push({ type: 'say', inputs: { message: line }, color: '#8b5cf6', outputs: ['exec'] });
+                    continue;
+                }
+
+                const cmdWordCount = matchedCmd.name.split(' ').length;
+                const argTokens = tokens.slice(cmdWordCount);
+                const inputs = {};
+                matchedCmd.inputs.forEach((inputName, i) => {
+                    inputs[inputName] = argTokens[i] || '';
+                });
+                parsedNodes.push({ type: matchedCmd.name, inputs, color: matchedCmd.color, outputs: matchedCmd.outputs });
+            }
+            return parsedNodes;
+        }
+
+        function loadScriptText(text, filename) {
+            const parsed = parseScriptToNodes(text);
+            if (parsed.length === 0) { showToast('No parseable commands found.', true); return; }
+
+            nodes = []; connections = []; nextId = 1;
+            panX = 0; panY = 0; zoom = 1;
+            document.getElementById('zoom-display').textContent = '100%';
+
+            const COLS = 3, NODE_W = 260, NODE_H = 130, GAP_X = 80, GAP_Y = 60;
+            const ORIGIN_X = 80, ORIGIN_Y = 80;
+
+            parsed.forEach((p, idx) => {
+                const col = idx % COLS;
+                const row = Math.floor(idx / COLS);
+                const x = ORIGIN_X + col * (NODE_W + GAP_X);
+                const y = ORIGIN_Y + row * (NODE_H + GAP_Y);
+                const cmd = (function() {
+                    for (const cmds of Object.values(COMMAND_LIBRARY))
+                        for (const c of cmds) if (c.name === p.type) return c;
+                    return null;
+                })();
+                nodes.push({
+                    id: nextId++, type: p.type, x, y,
+                    data: { inputs: p.inputs || {}, outputs: p.outputs || (cmd ? cmd.outputs : []) },
+                    color: p.color || (cmd ? cmd.color : '#64748b'),
+                    command: cmd
+                });
+            });
+
+            // Auto-connect sequential nodes via exec port
+            for (let i = 0; i < nodes.length - 1; i++) {
+                const from = nodes[i], to = nodes[i + 1];
+                const fromOutputs = from.type === 'start' ? ['exec'] : (from.data.outputs || []);
+                const execOut = fromOutputs.find(o => o === 'exec') || fromOutputs[0];
+                const toInputs = Object.keys(to.data.inputs || {});
+                const toPort = toInputs[0] || 'exec';
+                if (execOut) connections.push({ id: `${from.id}-${execOut}-${to.id}-${toPort}`, from: from.id, fromPort: execOut, to: to.id, toPort });
+            }
+
+            render();
+            const cmdCount = parsed.length - 1;
+            showToast(`✅ Loaded "${filename}" — ${cmdCount} command${cmdCount !== 1 ? 's' : ''} imported`);
+        }
+
+        // ============================
+        // Complete Command Library
+        // ============================
+        const COMMAND_LIBRARY = {
+            'Output & Input': [
+                { name: 'say',    desc: 'Print a message',          inputs: ['message'],           outputs: ['exec'], color: '#8b5cf6' },
+                { name: 'log',    desc: '[INFO] log message',        inputs: ['message'],           outputs: ['exec'], color: '#8b5cf6' },
+                { name: 'warn',   desc: '[WARN] log message',        inputs: ['message'],           outputs: ['exec'], color: '#f59e0b' },
+                { name: 'error',  desc: '[ERROR] log message',       inputs: ['message'],           outputs: ['exec'], color: '#ef4444' },
+                { name: 'ask',    desc: 'Prompt user for input',     inputs: ['variable', 'prompt'],outputs: ['exec'], color: '#8b5cf6' },
+                { name: 'pause',  desc: 'Wait for Enter key',        inputs: [],                    outputs: ['exec'], color: '#6366f1' },
+            ],
+            'Variables': [
+                { name: 'global_variable', desc: 'Declare global variable(s)',  inputs: ['names'],         outputs: ['exec'], color: '#14b8a6' },
+                { name: 'local_variable',  desc: 'Declare local variable(s)',   inputs: ['names'],         outputs: ['exec'], color: '#14b8a6' },
+                { name: 'assign',          desc: 'Set variable = value',        inputs: ['variable', 'value'], outputs: ['exec'], color: '#14b8a6' },
+            ],
+            'File Operations': [
+                { name: 'copy',             desc: 'Copy file or folder',        inputs: ['source', 'destination'],    outputs: ['exec'], color: '#3b82f6' },
+                { name: 'move',             desc: 'Move file or folder',        inputs: ['source', 'destination'],    outputs: ['exec'], color: '#3b82f6' },
+                { name: 'delete',           desc: 'Delete file or folder',      inputs: ['path'],                     outputs: ['exec'], color: '#ef4444' },
+                { name: 'make file',        desc: 'Create a new file',          inputs: ['path', 'content'],          outputs: ['exec'], color: '#10b981' },
+                { name: 'make folder',      desc: 'Create a new folder',        inputs: ['path'],                     outputs: ['exec'], color: '#10b981' },
+                { name: 'make script',      desc: 'Create a .do script',        inputs: ['path'],                     outputs: ['exec'], color: '#10b981' },
+                { name: 'replace_in_file',  desc: 'Find & replace in file',     inputs: ['file', 'search', 'replace'],outputs: ['exec'], color: '#3b82f6' },
+                { name: 'replace_regex_in_file', desc: 'Regex replace in file', inputs: ['file', 'pattern', 'replace'], outputs: ['exec'], color: '#3b82f6' },
+                { name: 'read_file',        desc: 'Read file to variable',      inputs: ['file', 'variable'],         outputs: ['exec', 'content'], color: '#3b82f6' },
+            ],
+            'Control Flow': [
+                { name: 'if / end_if',        desc: 'Conditional block',         inputs: ['condition'],     outputs: ['true', 'false'], color: '#ec4899' },
+                { name: 'for_each / end_for', desc: 'Iterate over collection',   inputs: ['var', 'source'], outputs: ['item', 'done'],  color: '#ec4899' },
+                { name: 'for_each_line',      desc: 'Iterate lines in file',     inputs: ['var', 'file'],   outputs: ['line', 'done'],  color: '#ec4899' },
+                { name: 'loop / end_loop',    desc: 'Loop N times',              inputs: ['count'],         outputs: ['exec', 'done'],  color: '#ec4899' },
+                { name: 'repeat / end_repeat',desc: 'Repeat while condition',    inputs: ['condition'],     outputs: ['exec', 'done'],  color: '#ec4899' },
+                { name: 'break',              desc: 'Break out of loop',         inputs: [],                outputs: [],                color: '#ef4444' },
+                { name: 'continue',           desc: 'Skip to next iteration',    inputs: [],                outputs: [],                color: '#f59e0b' },
+                { name: 'exit',               desc: 'Exit script',               inputs: ['code'],          outputs: [],                color: '#ef4444' },
+            ],
+            'Functions': [
+                { name: 'function / end_function', desc: 'Define a function',    inputs: ['name', 'params'], outputs: ['exec'],          color: '#a855f7' },
+                { name: 'return',                  desc: 'Return from function', inputs: ['value'],          outputs: [],                color: '#a855f7' },
+                { name: 'make a_command',          desc: 'Define a macro',       inputs: ['name'],           outputs: ['exec'],          color: '#a855f7' },
+                { name: 'run',                     desc: 'Run macro or shell cmd',inputs: ['command'],       outputs: ['exec'],          color: '#f59e0b' },
+                { name: 'capture',                 desc: 'Capture shell output', inputs: ['command', 'variable'], outputs: ['exec', 'output'], color: '#f59e0b' },
+            ],
+            'Process': [
+                { name: 'execute', desc: 'Run an .exe file',        inputs: ['exe_path'],   outputs: ['exec'], color: '#f59e0b' },
+                { name: 'do_new',  desc: 'Run a new DoScript',      inputs: ['script'],     outputs: ['exec'], color: '#f59e0b' },
+                { name: 'kill',    desc: 'Kill a process by name',  inputs: ['process'],    outputs: ['exec'], color: '#ef4444' },
+                { name: 'shutdown',desc: 'Shutdown Windows',        inputs: ['delay_secs'], outputs: ['exec'], color: '#ef4444' },
+                { name: 'wait',    desc: 'Wait N seconds',          inputs: ['seconds'],    outputs: ['exec'], color: '#6366f1' },
+            ],
+            'HTTP & Network': [
+                { name: 'http_get',    desc: 'HTTP GET request',    inputs: ['url', 'variable'],          outputs: ['exec', 'response'], color: '#06b6d4' },
+                { name: 'http_post',   desc: 'HTTP POST request',   inputs: ['url', 'data', 'variable'],  outputs: ['exec', 'response'], color: '#06b6d4' },
+                { name: 'http_put',    desc: 'HTTP PUT request',    inputs: ['url', 'data', 'variable'],  outputs: ['exec', 'response'], color: '#06b6d4' },
+                { name: 'http_delete', desc: 'HTTP DELETE request', inputs: ['url', 'variable'],          outputs: ['exec', 'response'], color: '#06b6d4' },
+                { name: 'download',    desc: 'Download file from URL', inputs: ['url', 'destination'],   outputs: ['exec'], color: '#06b6d4' },
+                { name: 'upload',      desc: 'Upload file to URL',  inputs: ['file', 'url'],             outputs: ['exec'], color: '#06b6d4' },
+                { name: 'ping',        desc: 'Ping a host',         inputs: ['host'],                     outputs: ['exec'], color: '#06b6d4' },
+                { name: 'open_link',   desc: 'Open URL in browser', inputs: ['url'],                      outputs: ['exec'], color: '#06b6d4' },
+            ],
+            'JSON': [
+                { name: 'json_read',  desc: 'Read JSON file',         inputs: ['file', 'variable'],           outputs: ['exec', 'data'],  color: '#a855f7' },
+                { name: 'json_write', desc: 'Write variable to JSON', inputs: ['variable', 'file'],           outputs: ['exec'],          color: '#a855f7' },
+                { name: 'json_get',   desc: 'Get value from JSON var',inputs: ['source_var', 'key', 'dest_var'], outputs: ['exec', 'value'], color: '#a855f7' },
+            ],
+            'CSV': [
+                { name: 'csv_read',  desc: 'Read CSV file',          inputs: ['file', 'variable'],                      outputs: ['exec', 'data'],  color: '#ec4899' },
+                { name: 'csv_write', desc: 'Write variable to CSV',  inputs: ['variable', 'file'],                      outputs: ['exec'],          color: '#ec4899' },
+                { name: 'csv_get',   desc: 'Get CSV cell value',     inputs: ['source_var', 'row', 'column', 'dest_var'], outputs: ['exec', 'value'], color: '#ec4899' },
+            ],
+            'ZIP / Archive': [
+                { name: 'zip',      desc: 'Create ZIP archive',   inputs: ['source', 'destination'],  outputs: ['exec'], color: '#f59e0b' },
+                { name: 'unzip',    desc: 'Extract ZIP archive',  inputs: ['zipfile', 'destination'], outputs: ['exec'], color: '#f59e0b' },
+                { name: 'zip_list', desc: 'List files in ZIP',    inputs: ['zipfile', 'variable'],    outputs: ['exec', 'files'], color: '#f59e0b' },
+            ],
+            'Random': [
+                { name: 'random_number', desc: 'Generate random integer',    inputs: ['min', 'max', 'variable'],  outputs: ['exec', 'value'], color: '#10b981' },
+                { name: 'random_string', desc: 'Generate random string',     inputs: ['length', 'variable'],      outputs: ['exec', 'value'], color: '#10b981' },
+                { name: 'random_choice', desc: 'Pick random item from list', inputs: ['items', 'variable'],       outputs: ['exec', 'value'], color: '#10b981' },
+            ],
+            'System Info': [
+                { name: 'system_cpu',    desc: 'Get CPU usage %',    inputs: ['variable'],         outputs: ['exec', 'value'], color: '#64748b' },
+                { name: 'system_memory', desc: 'Get memory usage %', inputs: ['variable'],         outputs: ['exec', 'value'], color: '#64748b' },
+                { name: 'system_disk',   desc: 'Get disk usage %',   inputs: ['path', 'variable'], outputs: ['exec', 'value'], color: '#64748b' },
+            ],
+            'PATH Management': [
+                { name: 'path add',         desc: 'Add to Windows PATH',     inputs: ['directory'],  outputs: ['exec'], color: '#475569' },
+                { name: 'path remove',      desc: 'Remove from Windows PATH',inputs: ['directory'],  outputs: ['exec'], color: '#475569' },
+                { name: 'script_path add',  desc: 'Add to script search path',inputs: ['directory'], outputs: ['exec'], color: '#475569' },
+                { name: 'script_path remove',desc: 'Remove from script path', inputs: ['directory'], outputs: ['exec'], color: '#475569' },
+                { name: 'script_path list', desc: 'List script search paths', inputs: [],            outputs: ['exec'], color: '#475569' },
+            ],
+            'Time Variables': [
+                { name: 'time',   desc: 'Unix timestamp (read-only)',    inputs: [], outputs: ['value'], color: '#0ea5e9' },
+                { name: 'today',  desc: 'Current date YYYY-MM-DD',      inputs: [], outputs: ['value'], color: '#0ea5e9' },
+                { name: 'now',    desc: 'Current time HH:MM:SS',        inputs: [], outputs: ['value'], color: '#0ea5e9' },
+                { name: 'year',   desc: 'Current year',                 inputs: [], outputs: ['value'], color: '#0ea5e9' },
+                { name: 'month',  desc: 'Current month number',         inputs: [], outputs: ['value'], color: '#0ea5e9' },
+                { name: 'day',    desc: 'Current day number',           inputs: [], outputs: ['value'], color: '#0ea5e9' },
+                { name: 'hour',   desc: 'Current hour',                 inputs: [], outputs: ['value'], color: '#0ea5e9' },
+                { name: 'minute', desc: 'Current minute',               inputs: [], outputs: ['value'], color: '#0ea5e9' },
+                { name: 'second', desc: 'Current second',               inputs: [], outputs: ['value'], color: '#0ea5e9' },
+            ],
+        };
+
+        // ============================
+        // State
+        // ============================
+        let nodes = [];
+        let connections = [];
+        let nextId = 1;
+        let selectedNode = null;
+        let draggingNode = null;
+        let connectingFrom = null;
+        let tempConnectionPos = null;
+        let zoom = 1;
+
+        // Pan state
+        let panX = 0;
+        let panY = 0;
+        let isPanning = false;
+        let panStart = null;
+
+        // ============================
+        // Init
+        // ============================
+        function init() {
+            renderLibrary();
+            addStartNode();
+            setupEventListeners();
+            render();
+        }
+
+        // ============================
+        // Library
+        // ============================
+        function renderLibrary(filter = '') {
+            const container = document.getElementById('library-content');
+            container.innerHTML = '';
+            const lf = filter.toLowerCase();
+
+            for (const [category, commands] of Object.entries(COMMAND_LIBRARY)) {
+                const filtered = filter
+                    ? commands.filter(c => c.name.toLowerCase().includes(lf) || c.desc.toLowerCase().includes(lf))
+                    : commands;
+                if (filtered.length === 0) continue;
+
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'library-category';
+
+                const title = document.createElement('h3');
+                title.textContent = category;
+                categoryDiv.appendChild(title);
+
+                filtered.forEach(cmd => {
+                    const btn = document.createElement('button');
+                    btn.className = 'command-btn';
+                    btn.style.borderLeftColor = cmd.color;
+                    btn.onclick = () => addNode(cmd);
+                    btn.innerHTML = `
+                        <div class="command-name">${cmd.name}</div>
+                        <div class="command-desc">${cmd.desc}</div>
+                    `;
+                    categoryDiv.appendChild(btn);
+                });
+
+                container.appendChild(categoryDiv);
+            }
+        }
+
+        // ============================
+        // Nodes
+        // ============================
+        function addStartNode() {
+            nodes.push({ id: nextId++, type: 'start', x: 120, y: 120, data: {}, color: '#10b981' });
+        }
+
+        function addNode(command) {
+            const node = {
+                id: nextId++,
+                type: command.name,
+                x: 300 + Math.random() * 60,
+                y: 150 + Math.random() * 60,
+                data: {
+                    inputs: command.inputs.reduce((acc, inp) => ({ ...acc, [inp]: '' }), {}),
+                    outputs: command.outputs,
+                },
+                color: command.color,
+                command: command
+            };
+            nodes.push(node);
+            render();
+        }
+
+        function deleteNode(nodeId) {
+            nodes = nodes.filter(n => n.id !== nodeId);
+            connections = connections.filter(c => c.from !== nodeId && c.to !== nodeId);
+            if (selectedNode === nodeId) selectedNode = null;
+            render();
+        }
+
+        // ============================
+        // Rendering
+        // ============================
+        function applyTransform(el) {
+            el.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+            el.style.transformOrigin = '0 0';
+        }
+
+        function renderNodes() {
+            const container = document.getElementById('nodes-container');
+            container.innerHTML = '';
+            applyTransform(container);
+
+            nodes.forEach(node => {
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'node' + (selectedNode === node.id ? ' selected' : '');
+                nodeEl.setAttribute('data-node-id', node.id);
+                nodeEl.style.left = node.x + 'px';
+                nodeEl.style.top = node.y + 'px';
+
+                // Header
+                const header = document.createElement('div');
+                header.className = 'node-header';
+                header.style.backgroundColor = node.color;
+
+                const title = document.createElement('span');
+                title.textContent = node.type === 'start' ? '▶ Start' : node.type;
+                header.appendChild(title);
+
+                if (node.type !== 'start') {
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'delete-btn';
+                    deleteBtn.textContent = '×';
+                    deleteBtn.onclick = (e) => { e.stopPropagation(); deleteNode(node.id); };
+                    header.appendChild(deleteBtn);
+                }
+                nodeEl.appendChild(header);
+
+                // Inputs
+                if (node.data && node.data.inputs && Object.keys(node.data.inputs).length > 0) {
+                    const body = document.createElement('div');
+                    body.className = 'node-body';
+
+                    Object.keys(node.data.inputs).forEach(inputName => {
+                        const inputDiv = document.createElement('div');
+                        inputDiv.className = 'node-input';
+
+                        const port = document.createElement('div');
+                        port.className = 'input-port';
+                        port.setAttribute('data-node-id', node.id);
+                        port.setAttribute('data-port', inputName);
+                        port.setAttribute('data-port-type', 'input');
+                        inputDiv.appendChild(port);
+
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.placeholder = inputName;
+                        input.value = node.data.inputs[inputName];
+                        input.onchange = (e) => { node.data.inputs[inputName] = e.target.value; };
+                        input.onmousedown = (e) => e.stopPropagation();
+                        input.onclick = (e) => e.stopPropagation();
+                        inputDiv.appendChild(input);
+
+                        body.appendChild(inputDiv);
+                    });
+                    nodeEl.appendChild(body);
+                }
+
+                // Outputs
+                const outputs = node.type === 'start' ? ['exec'] : (node.data?.outputs || []);
+                if (outputs.length > 0) {
+                    const outputsDiv = document.createElement('div');
+                    outputsDiv.className = 'node-outputs';
+
+                    outputs.forEach(outputName => {
+                        const outputDiv = document.createElement('div');
+                        outputDiv.className = 'node-output';
+
+                        const label = document.createElement('span');
+                        label.className = 'output-label';
+                        label.textContent = outputName;
+                        outputDiv.appendChild(label);
+
+                        const port = document.createElement('div');
+                        port.className = 'output-port' + (outputName === 'exec' ? ' exec' : '');
+                        port.setAttribute('data-node-id', node.id);
+                        port.setAttribute('data-port', outputName);
+                        port.setAttribute('data-port-type', 'output');
+                        outputDiv.appendChild(port);
+
+                        outputsDiv.appendChild(outputDiv);
+                    });
+                    nodeEl.appendChild(outputsDiv);
+                }
+
+                // Node drag
+                header.onmousedown = (e) => {
+                    if (e.target.classList.contains('delete-btn')) return;
+                    e.stopPropagation();
+                    isDraggingNodeFlag = true;
+                    draggingNode = {
+                        id: node.id,
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        nodeStartX: node.x,
+                        nodeStartY: node.y
+                    };
+                    selectedNode = node.id;
+                    render();
+                };
+
+                container.appendChild(nodeEl);
+            });
+        }
+
+        function renderConnections() {
+            const svg = document.getElementById('connections-svg');
+            svg.innerHTML = '';
+            applyTransform(svg);
+
+            connections.forEach(conn => {
+                const fromPort = document.querySelector(`[data-node-id="${conn.from}"][data-port="${conn.fromPort}"][data-port-type="output"]`);
+                const toPort = document.querySelector(`[data-node-id="${conn.to}"][data-port="${conn.toPort}"][data-port-type="input"]`);
+                if (!fromPort || !toPort) return;
+
+                const start = getPortPosition(fromPort);
+                const end = getPortPosition(toPort);
+                if (!start || !end) return;
+
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', createBezierPath(start.x, start.y, end.x, end.y));
+                path.setAttribute('class', 'connection-line');
+                svg.appendChild(path);
+            });
+
+            if (connectingFrom && tempConnectionPos) {
+                const fromPort = document.querySelector(`[data-node-id="${connectingFrom.nodeId}"][data-port="${connectingFrom.portName}"][data-port-type="output"]`);
+                if (fromPort) {
+                    const start = getPortPosition(fromPort);
+                    if (start) {
+                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        path.setAttribute('d', createBezierPath(start.x, start.y, tempConnectionPos.x, tempConnectionPos.y));
+                        path.setAttribute('class', 'temp-connection');
+                        svg.appendChild(path);
+                    }
+                }
+            }
+        }
+
+        function getPortPosition(element) {
+            if (!element) return null;
+            const rect = element.getBoundingClientRect();
+            const canvasRect = document.getElementById('canvas-container').getBoundingClientRect();
+            return {
+                x: (rect.left - canvasRect.left + rect.width / 2 - panX) / zoom,
+                y: (rect.top - canvasRect.top + rect.height / 2 - panY) / zoom
+            };
+        }
+
+        function createBezierPath(x1, y1, x2, y2) {
+            const dx = Math.abs(x2 - x1);
+            const offset = Math.min(dx * 0.5, 150);
+            return `M ${x1} ${y1} C ${x1 + offset} ${y1}, ${x2 - offset} ${y2}, ${x2} ${y2}`;
+        }
+
+        function render() {
+            renderNodes();
+            setTimeout(renderConnections, 10);
+        }
+
+        // ============================
+        // Code Generation
+        // ============================
+        function generateCode() {
+            const lines = ['# Generated by DoScript Visual IDE v2', '# https://github.com/TheServer-lab/DoScript', ''];
+            const visited = new Set();
+
+            function traverse(node) {
+                if (!node || visited.has(node.id)) return;
+                visited.add(node.id);
+
+                if (node.type === 'start') {
+                    lines.push('# Script Start');
+                } else {
+                    let line = node.type;
+                    if (node.data && node.data.inputs) {
+                        const args = Object.values(node.data.inputs)
+                            .map(v => {
+                                if (!v) return '';
+                                if (v.includes(' ')) return `"${v}"`;
+                                return v;
+                            })
+                            .filter(v => v)
+                            .join(' ');
+                        if (args) line += ' ' + args;
+                    }
+                    lines.push(line);
+                }
+
+                const outgoing = connections.filter(c => c.from === node.id);
+                outgoing.forEach(conn => {
+                    const nextNode = nodes.find(n => n.id === conn.to);
+                    traverse(nextNode);
+                });
+            }
+
+            const startNode = nodes.find(n => n.type === 'start');
+            traverse(startNode);
+            return lines.join('\n');
+        }
+
+        // ============================
+        // Event Listeners
+        // ============================
+        let isDraggingNodeFlag = false;
+
+        function setupEventListeners() {
+            const canvasContainer = document.getElementById('canvas-container');
+
+            // ---- Pan logic ----
+            canvasContainer.addEventListener('mousedown', (e) => {
+                const target = e.target;
+
+                // Output port → start connection
+                if (target.classList.contains('output-port')) {
+                    e.preventDefault();
+                    const nodeId = parseInt(target.getAttribute('data-node-id'));
+                    const portName = target.getAttribute('data-port');
+                    connectingFrom = { nodeId, portName };
+                    tempConnectionPos = screenToCanvas(e.clientX, e.clientY);
+                    return;
+                }
+
+                // Node header drag is handled inside renderNodes
+                // Middle mouse or empty canvas background → pan
+                const isEmptyCanvas = target === canvasContainer ||
+                    target.id === 'canvas' ||
+                    target.id === 'connections-svg';
+
+                if (e.button === 1 || (e.button === 0 && isEmptyCanvas)) {
+                    e.preventDefault();
+                    isPanning = true;
+                    panStart = { x: e.clientX - panX, y: e.clientY - panY };
+                    canvasContainer.classList.add('panning');
+                }
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (isPanning && panStart) {
+                    panX = e.clientX - panStart.x;
+                    panY = e.clientY - panStart.y;
+                    render();
+                    return;
+                }
+
+                if (draggingNode) {
+                    const node = nodes.find(n => n.id === draggingNode.id);
+                    if (node) {
+                        const dx = (e.clientX - draggingNode.startX) / zoom;
+                        const dy = (e.clientY - draggingNode.startY) / zoom;
+                        node.x = draggingNode.nodeStartX + dx;
+                        node.y = draggingNode.nodeStartY + dy;
+                        render();
+                    }
+                } else if (connectingFrom) {
+                    tempConnectionPos = screenToCanvas(e.clientX, e.clientY);
+                    renderConnections();
+                }
+            });
+
+            window.addEventListener('mouseup', (e) => {
+                if (isPanning) {
+                    isPanning = false;
+                    panStart = null;
+                    document.getElementById('canvas-container').classList.remove('panning');
+                }
+
+                const target = e.target;
+                if (connectingFrom && target.classList.contains('input-port')) {
+                    const toNodeId = parseInt(target.getAttribute('data-node-id'));
+                    const toPort = target.getAttribute('data-port');
+
+                    if (toNodeId !== connectingFrom.nodeId) {
+                        const exists = connections.some(c =>
+                            c.from === connectingFrom.nodeId &&
+                            c.to === toNodeId &&
+                            c.toPort === toPort
+                        );
+                        if (!exists) {
+                            connections.push({
+                                id: `${connectingFrom.nodeId}-${connectingFrom.portName}-${toNodeId}-${toPort}`,
+                                from: connectingFrom.nodeId,
+                                fromPort: connectingFrom.portName,
+                                to: toNodeId,
+                                toPort: toPort
+                            });
+                        }
+                    }
+                }
+
+                draggingNode = null;
+                isDraggingNodeFlag = false;
+                connectingFrom = null;
+                tempConnectionPos = null;
+                render();
+            });
+
+            // Prevent middle-click scroll
+            canvasContainer.addEventListener('auxclick', e => e.preventDefault());
+
+            // Zoom via scroll wheel
+            canvasContainer.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -0.08 : 0.08;
+                zoom = Math.max(0.25, Math.min(3, zoom + delta));
+                document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%';
+                render();
+            }, { passive: false });
+
+            // Search
+            document.getElementById('library-search').addEventListener('input', (e) => {
+                renderLibrary(e.target.value);
+            });
+
+            // Toolbar
+            document.getElementById('toggle-library').onclick = () => {
+                const lib = document.getElementById('library');
+                lib.style.display = lib.style.display === 'none' ? 'flex' : 'none';
+            };
+
+            document.getElementById('generate-code').onclick = () => {
+                const code = generateCode();
+                document.getElementById('code-text').textContent = code;
+                document.getElementById('code-preview').classList.add('visible');
+            };
+
+            document.getElementById('download-code').onclick = () => {
+                const code = generateCode();
+                const blob = new Blob([code], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'script.do';
+                a.click();
+            };
+
+            document.getElementById('clear-all').onclick = () => {
+                if (confirm('Clear all nodes and connections?')) {
+                    nodes = [];
+                    connections = [];
+                    nextId = 1;
+                    panX = 0;
+                    panY = 0;
+                    zoom = 1;
+                    document.getElementById('zoom-display').textContent = '100%';
+                    addStartNode();
+                    render();
+                }
+            };
+
+            document.getElementById('reset-pan').onclick = () => {
+                panX = 0;
+                panY = 0;
+                zoom = 1;
+                document.getElementById('zoom-display').textContent = '100%';
+                render();
+            };
+
+            document.getElementById('code-close').onclick = () => {
+                document.getElementById('code-preview').classList.remove('visible');
+            };
+
+            // ---- Load .do file ----
+            const fileInput = document.getElementById('file-input');
+            document.getElementById('load-file-btn').onclick = () => fileInput.click();
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => loadScriptText(ev.target.result, file.name);
+                reader.readAsText(file);
+                fileInput.value = ''; // allow re-loading same file
+            });
+
+            // ---- Drag-and-drop onto canvas ----
+            const dropOverlay = document.getElementById('drop-overlay');
+            canvasContainer.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropOverlay.classList.add('active');
+            });
+            canvasContainer.addEventListener('dragleave', (e) => {
+                if (!canvasContainer.contains(e.relatedTarget)) dropOverlay.classList.remove('active');
+            });
+            canvasContainer.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropOverlay.classList.remove('active');
+                const file = e.dataTransfer.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => loadScriptText(ev.target.result, file.name);
+                reader.readAsText(file);
+            });
+
+            document.getElementById('zoom-in').onclick = () => {
+                zoom = Math.min(3, zoom + 0.1);
+                document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%';
+                render();
+            };
+
+            document.getElementById('zoom-out').onclick = () => {
+                zoom = Math.max(0.25, zoom - 0.1);
+                document.getElementById('zoom-display').textContent = Math.round(zoom * 100) + '%';
+                render();
+            };
+        }
+
+        // Convert screen coords to canvas-space coords
+        function screenToCanvas(sx, sy) {
+            const rect = document.getElementById('canvas-container').getBoundingClientRect();
+            return {
+                x: (sx - rect.left - panX) / zoom,
+                y: (sy - rect.top - panY) / zoom
+            };
+        }
+
+        // Start the app
+        init();
+    </script>
+</body>
+</html>
