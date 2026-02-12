@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>DoScript Visual IDE v3 — Fixed</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>DoScript Visual IDE — Fixed</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -14,500 +14,106 @@
             color: #fff;
         }
 
-        #app {
-            display: flex;
-            height: 100vh;
-            width: 100vw;
-        }
+        #app { display:flex; height:100vh; width:100vw; }
 
         /* Sidebar */
-        #sidebar {
-            width: 280px;
-            background: #2a2a2a;
-            border-right: 1px solid #444;
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-        }
+        #sidebar { width:300px; background:#2a2a2a; border-right:1px solid #444; display:flex; flex-direction:column; }
+        #sidebar-header { padding:14px 16px; border-bottom:1px solid #444; }
+        #sidebar-header h2 { font-size:15px; font-weight:600; color:#fff; }
+        #search-box { padding:8px 12px; border-bottom:1px solid #333; }
+        #search-input { width:100%; padding:8px 10px; background:#1a1a1a; border:1px solid #444; border-radius:4px; color:#fff; font-size:12px; }
+        #search-input::placeholder { color:#666; }
+        #commands-list { flex:1; overflow-y:auto; }
+        .category { padding:10px 12px; border-bottom:1px solid #333; }
+        .category h3 { color:#888; font-size:10px; text-transform:uppercase; margin-bottom:6px; font-weight:600; letter-spacing:0.5px; }
+        .cmd-button { width:100%; padding:8px 10px; margin-bottom:3px; background:#333; border:none; border-left:3px solid; border-radius:4px; color:#fff; text-align:left; cursor:pointer; transition:background .15s; }
+        .cmd-button:hover { background:#3d3d3d; }
+        .cmd-name { font-weight:500; font-size:12px; }
+        .cmd-desc { font-size:10px; color:#888; margin-top:1px; }
 
-        #sidebar-header {
-            padding: 14px 16px;
-            border-bottom: 1px solid #444;
-            background: #2a2a2a;
-        }
+        /* Main */
+        #main { flex:1; display:flex; flex-direction:column; min-width:0; }
 
-        #sidebar-header h2 {
-            font-size: 15px;
-            font-weight: 600;
-            color: #fff;
-        }
+        #toolbar { background:#2a2a2a; border-bottom:1px solid #444; padding:10px 12px; display:flex; gap:6px; align-items:center; }
+        .btn { padding:7px 13px; border:none; border-radius:4px; color:#fff; font-size:12px; cursor:pointer; transition:opacity .2s; white-space:nowrap; }
+        .btn:hover { opacity:.85; }
+        .btn-primary { background:#3b82f6; }
+        .btn-success { background:#10b981; }
+        .btn-purple { background:#8b5cf6; }
+        .btn-secondary { background:#444; }
+        .btn-danger { background:#ef4444; }
+        .spacer { flex:1; }
+        .hint { color:#555; font-size:11px; margin-left:8px; }
+        .zoom-info { color:#aaa; font-size:12px; margin-left:4px; min-width:42px; text-align:center; }
 
-        #search-box {
-            padding: 8px 12px;
-            border-bottom: 1px solid #333;
-        }
+        #canvas-wrapper { flex:1; position:relative; overflow:hidden; background:#1a1a1a; }
+        #canvas-wrapper.panning { cursor:grabbing; }
+        #grid { position:absolute; top:0; left:0; width:100%; height:100%; background-image: linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px); background-size:20px 20px; }
 
-        #search-input {
-            width: 100%;
-            padding: 8px 10px;
-            background: #1a1a1a;
-            border: 1px solid #444;
-            border-radius: 4px;
-            color: #fff;
-            font-size: 12px;
-        }
+        #svg-layer { position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; pointer-events:auto; }
+        #nodes-layer { position:absolute; top:0; left:0; z-index:2; }
 
-        #search-input::placeholder { color: #666; }
-        #search-input:focus { outline: none; border-color: #3b82f6; }
+        .node { position:absolute; min-width:200px; max-width:240px; background:#2a2a2a; border:2px solid #444; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.5); cursor:move; user-select:none; touch-action:none; }
+        .node.selected { border-color:#3b82f6; box-shadow:0 0 0 2px rgba(59,130,246,.3); }
+        .node-header { padding:9px 10px; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; align-items:center; gap:8px; touch-action:none; }
+        .node-title-input { flex:1; background:transparent; border:1px solid transparent; color:#fff; font-weight:600; font-size:12px; padding:2px 4px; border-radius:3px; outline:none; }
+        .node-title-input:not([readonly]):hover { background: rgba(255,255,255,0.1); }
+        .node-title-input:focus { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); }
+        .node-delete-btn { background:rgba(255,255,255,0.2); border:none; color:#fff; padding:3px 7px; border-radius:3px; cursor:pointer; font-size:11px; flex-shrink:0; }
+        .node-delete-btn:hover { background:rgba(255,255,255,0.35); }
+        .node-body { padding:10px; }
+        .input-row { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+        .port-in { width:13px; height:13px; border-radius:50%; background:#fbbf24; border:2px solid #1a1a1a; cursor:pointer; flex-shrink:0; transition:transform .1s; }
+        .port-in:hover { transform:scale(1.3); box-shadow:0 0 8px rgba(251,191,36,.6); }
+        .node-input { flex:1; background:#1a1a1a; border:1px solid #444; color:#fff; padding:5px 7px; border-radius:4px; font-size:11px; }
+        .node-input::placeholder { color:#666; }
+        .node-input:focus { outline:none; border-color:#3b82f6; }
+        .node-outputs { border-top:1px solid #444; padding:10px; }
+        .output-row { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-bottom:5px; }
+        .output-label { color:#aaa; font-size:10px; }
+        .port-out { width:13px; height:13px; border-radius:50%; background:#3b82f6; border:2px solid #1a1a1a; cursor:pointer; flex-shrink:0; transition:transform .1s; }
+        .port-out:hover { transform:scale(1.3); box-shadow:0 0 8px rgba(59,130,246,.6); }
+        .port-out.exec { background:#10b981; }
+        .port-out.exec:hover { box-shadow:0 0 8px rgba(16,185,129,.6); }
 
-        #commands-list {
-            flex: 1;
-            overflow-y: auto;
-        }
+        .connection { stroke:#6366f1; stroke-width:4; fill:none; cursor:pointer; pointer-events:auto; stroke-linecap:round; transition:all .15s; }
+        .connection:hover { stroke:#ef4444; stroke-width:6; filter:drop-shadow(0 0 6px rgba(239,68,68,.8)); }
+        .temp-connection { stroke:#818cf8; stroke-width:3; fill:none; stroke-dasharray:6,4; pointer-events:none; }
 
-        .category {
-            padding: 10px 12px;
-            border-bottom: 1px solid #333;
-        }
+        #code-panel { height:240px; background:#2a2a2a; border-top:1px solid #444; display:none; flex-direction:column; }
+        #code-panel.visible { display:flex; }
+        #code-header { padding:10px 12px; border-bottom:1px solid #444; display:flex; justify-content:space-between; align-items:center; }
+        #code-header h3 { font-size:13px; font-weight:600; }
+        #code-close { background:none; border:none; color:#aaa; font-size:20px; cursor:pointer; padding:0 6px; }
+        #code-content { flex:1; overflow:auto; padding:10px 12px; }
+        #code-content pre { color:#4ade80; font-family:'Courier New', monospace; font-size:12px; line-height:1.5; }
 
-        .category h3 {
-            color: #888;
-            font-size: 10px;
-            text-transform: uppercase;
-            margin-bottom: 6px;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-        }
+        #drop-overlay { display:none; position:absolute; inset:0; background:rgba(59,130,246,0.12); border:3px dashed #3b82f6; border-radius:6px; z-index:999; align-items:center; justify-content:center; pointer-events:none; }
+        #drop-overlay.active { display:flex; }
+        #drop-text { color:#3b82f6; font-size:22px; font-weight:700; text-shadow:0 2px 8px rgba(0,0,0,.7); }
 
-        .cmd-button {
-            width: 100%;
-            padding: 8px 10px;
-            margin-bottom: 3px;
-            background: #333;
-            border: none;
-            border-left: 3px solid;
-            border-radius: 4px;
-            color: #fff;
-            text-align: left;
-            cursor: pointer;
-            transition: background 0.15s;
-        }
+        #toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#1e293b; color:#fff; border:1px solid #334155; border-radius:8px; padding:10px 20px; font-size:13px; z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none; }
+        #toast.show { opacity:1; }
 
-        .cmd-button:hover {
-            background: #3d3d3d;
-        }
-
-        .cmd-name {
-            font-weight: 500;
-            font-size: 12px;
-        }
-
-        .cmd-desc {
-            font-size: 10px;
-            color: #888;
-            margin-top: 1px;
-        }
-
-        /* Main area */
-        #main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-        }
-
-        /* Toolbar */
-        #toolbar {
-            background: #2a2a2a;
-            border-bottom: 1px solid #444;
-            padding: 10px 12px;
-            display: flex;
-            gap: 6px;
-            align-items: center;
-        }
-
-        .btn {
-            padding: 7px 13px;
-            border: none;
-            border-radius: 4px;
-            color: #fff;
-            font-size: 12px;
-            cursor: pointer;
-            transition: opacity 0.2s;
-            white-space: nowrap;
-        }
-
-        .btn:hover { opacity: 0.85; }
-        .btn-primary { background: #3b82f6; }
-        .btn-success { background: #10b981; }
-        .btn-purple { background: #8b5cf6; }
-        .btn-secondary { background: #444; }
-        .btn-danger { background: #ef4444; }
-
-        .spacer { flex: 1; }
-
-        .hint {
-            color: #555;
-            font-size: 11px;
-            margin-left: 8px;
-        }
-
-        .zoom-info {
-            color: #aaa;
-            font-size: 12px;
-            margin-left: 4px;
-            min-width: 42px;
-            text-align: center;
-        }
-
-        /* Canvas */
-        #canvas-wrapper {
-            flex: 1;
-            position: relative;
-            overflow: hidden;
-            background: #1a1a1a;
-        }
-
-        #canvas-wrapper.panning {
-            cursor: grabbing;
-        }
-
-        #grid {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image:
-                linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
-            background-size: 20px 20px;
-        }
-
-        #svg-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 1;
-        }
-
-        #nodes-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 2;
-        }
-
-        /* Node styling */
-        .node {
-            position: absolute;
-            min-width: 200px;
-            max-width: 240px;
-            background: #2a2a2a;
-            border: 2px solid #444;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            cursor: move;
-            user-select: none;
-        }
-
-        .node.selected {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
-        }
-
-        .node-header {
-            padding: 9px 10px;
-            border-radius: 6px 6px 0 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .node-title-input {
-            flex: 1;
-            background: transparent;
-            border: 1px solid transparent;
-            color: #fff;
-            font-weight: 600;
-            font-size: 12px;
-            padding: 2px 4px;
-            border-radius: 3px;
-            outline: none;
-        }
-
-        .node-title-input:not([readonly]):hover {
-            background: rgba(255,255,255,0.1);
-        }
-
-        .node-title-input:focus {
-            background: rgba(255,255,255,0.15);
-            border-color: rgba(255,255,255,0.3);
-        }
-
-        .node-delete-btn {
-            background: rgba(255,255,255,0.2);
-            border: none;
-            color: #fff;
-            padding: 3px 7px;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 11px;
-            flex-shrink: 0;
-        }
-
-        .node-delete-btn:hover {
-            background: rgba(255,255,255,0.35);
-        }
-
-        .node-body {
-            padding: 10px;
-        }
-
-        .input-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-bottom: 6px;
-        }
-
-        .port-in {
-            width: 13px;
-            height: 13px;
-            border-radius: 50%;
-            background: #fbbf24;
-            border: 2px solid #1a1a1a;
-            cursor: pointer;
-            flex-shrink: 0;
-            transition: transform 0.1s;
-        }
-
-        .port-in:hover {
-            transform: scale(1.3);
-            box-shadow: 0 0 8px rgba(251, 191, 36, 0.6);
-        }
-
-        .node-input {
-            flex: 1;
-            background: #1a1a1a;
-            border: 1px solid #444;
-            color: #fff;
-            padding: 5px 7px;
-            border-radius: 4px;
-            font-size: 11px;
-        }
-
-        .node-input::placeholder { color: #666; }
-        .node-input:focus { outline: none; border-color: #3b82f6; }
-
-        .node-outputs {
-            border-top: 1px solid #444;
-            padding: 10px;
-        }
-
-        .output-row {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 6px;
-            margin-bottom: 5px;
-        }
-
-        .output-label {
-            color: #aaa;
-            font-size: 10px;
-        }
-
-        .port-out {
-            width: 13px;
-            height: 13px;
-            border-radius: 50%;
-            background: #3b82f6;
-            border: 2px solid #1a1a1a;
-            cursor: pointer;
-            flex-shrink: 0;
-            transition: transform 0.1s;
-        }
-
-        .port-out:hover {
-            transform: scale(1.3);
-            box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
-        }
-
-        .port-out.exec {
-            background: #10b981;
-        }
-
-        .port-out.exec:hover {
-            box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
-        }
-
-        /* SVG connections */
-        .connection {
-            stroke: #6366f1;
-            stroke-width: 4;
-            fill: none;
-            cursor: pointer;
-            pointer-events: stroke;
-            stroke-linecap: round;
-            transition: all 0.15s;
-        }
-
-        .connection:hover {
-            stroke: #ef4444;
-            stroke-width: 6;
-            filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.8));
-        }
-
-        .temp-connection {
-            stroke: #818cf8;
-            stroke-width: 3;
-            fill: none;
-            stroke-dasharray: 6, 4;
-            pointer-events: none;
-        }
-
-        /* Code preview */
-        #code-panel {
-            height: 240px;
-            background: #2a2a2a;
-            border-top: 1px solid #444;
-            display: none;
-            flex-direction: column;
-        }
-
-        #code-panel.visible {
-            display: flex;
-        }
-
-        #code-header {
-            padding: 10px 12px;
-            border-bottom: 1px solid #444;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        #code-header h3 {
-            font-size: 13px;
-            font-weight: 600;
-        }
-
-        #code-close {
-            background: none;
-            border: none;
-            color: #aaa;
-            font-size: 20px;
-            cursor: pointer;
-            padding: 0 6px;
-        }
-
-        #code-content {
-            flex: 1;
-            overflow: auto;
-            padding: 10px 12px;
-        }
-
-        #code-content pre {
-            color: #4ade80;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            line-height: 1.5;
-        }
-
-        /* Drop overlay */
-        #drop-overlay {
-            display: none;
-            position: absolute;
-            inset: 0;
-            background: rgba(59,130,246,0.12);
-            border: 3px dashed #3b82f6;
-            border-radius: 6px;
-            z-index: 999;
-            align-items: center;
-            justify-content: center;
-            pointer-events: none;
-        }
-
-        #drop-overlay.active {
-            display: flex;
-        }
-
-        #drop-text {
-            color: #3b82f6;
-            font-size: 22px;
-            font-weight: 700;
-            text-shadow: 0 2px 8px rgba(0,0,0,0.7);
-        }
-
-        /* Toast */
-        #toast {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #1e293b;
-            color: #fff;
-            border: 1px solid #334155;
-            border-radius: 8px;
-            padding: 10px 20px;
-            font-size: 13px;
-            z-index: 9999;
-            opacity: 0;
-            transition: opacity 0.3s;
-            pointer-events: none;
-        }
-
-        #toast.show {
-            opacity: 1;
-        }
-
-        /* Tooltip */
-        #tooltip {
-            position: fixed;
-            background: rgba(239, 68, 68, 0.95);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 600;
-            pointer-events: none;
-            z-index: 10000;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-
-        #tooltip.show {
-            opacity: 1;
-        }
+        #tooltip { position:fixed; background:rgba(239,68,68,.95); color:white; padding:6px 12px; border-radius:6px; font-size:11px; font-weight:600; pointer-events:none; z-index:10000; opacity:0; transition:opacity .2s; }
+        #tooltip.show { opacity:1; }
     </style>
 </head>
 <body>
     <div id="app">
-        <!-- Sidebar -->
         <div id="sidebar">
-            <div id="sidebar-header">
-                <h2>Command Library</h2>
-            </div>
-            <div id="search-box">
-                <input type="text" id="search-input" placeholder="🔍 Search commands...">
-            </div>
+            <div id="sidebar-header"><h2>Command Library</h2></div>
+            <div id="search-box"><input id="search-input" placeholder="🔍 Search commands..." /></div>
             <div id="commands-list"></div>
         </div>
 
-        <!-- Main area -->
         <div id="main">
-            <!-- Toolbar -->
             <div id="toolbar">
                 <button class="btn btn-primary" id="btn-toggle-sidebar">☰ Library</button>
                 <button class="btn btn-success" id="btn-generate">▶ Generate</button>
                 <button class="btn btn-purple" id="btn-download">⬇ Download .do</button>
                 <button class="btn btn-primary" id="btn-load">📂 Load .do</button>
-                <input type="file" id="file-input" accept=".do,.txt" style="display:none">
+                <input id="file-input" type="file" accept=".do,.txt" style="display:none" />
                 <button class="btn btn-secondary" id="btn-clear">🗑 Clear</button>
                 <button class="btn btn-secondary" id="btn-reset-view">⌖ Reset View</button>
                 <div class="spacer"></div>
@@ -517,25 +123,16 @@
                 <span class="hint">💡 Click connections to delete • Double-click titles to edit</span>
             </div>
 
-            <!-- Canvas -->
             <div id="canvas-wrapper">
                 <div id="grid"></div>
                 <svg id="svg-layer"></svg>
                 <div id="nodes-layer"></div>
-                <div id="drop-overlay">
-                    <div id="drop-text">Drop .do file here</div>
-                </div>
+                <div id="drop-overlay"><div id="drop-text">Drop .do file here</div></div>
             </div>
 
-            <!-- Code panel -->
             <div id="code-panel">
-                <div id="code-header">
-                    <h3>Generated DoScript Code</h3>
-                    <button id="code-close">×</button>
-                </div>
-                <div id="code-content">
-                    <pre id="code-text"></pre>
-                </div>
+                <div id="code-header"><h3>Generated DoScript Code</h3><button id="code-close">×</button></div>
+                <div id="code-content"><pre id="code-text"></pre></div>
             </div>
         </div>
     </div>
@@ -544,120 +141,86 @@
     <div id="tooltip">Click to delete</div>
 
     <script>
-        // ========================================
-        // COMMAND LIBRARY
-        // ========================================
+        // --- Full command list with FIXED definitions
         const COMMANDS = {
             'Output & Input': [
-                { name: 'say', desc: 'Print a message', inputs: ['message'], outputs: ['exec'], color: '#8b5cf6' },
-                { name: 'log', desc: '[INFO] log message', inputs: ['message'], outputs: ['exec'], color: '#8b5cf6' },
-                { name: 'warn', desc: '[WARN] log message', inputs: ['message'], outputs: ['exec'], color: '#f59e0b' },
-                { name: 'error', desc: '[ERROR] log message', inputs: ['message'], outputs: ['exec'], color: '#ef4444' },
-                { name: 'ask', desc: 'Prompt user for input', inputs: ['variable', 'prompt'], outputs: ['exec'], color: '#8b5cf6' },
+                { name: 'say', desc: 'Print a message', inputs: ['message'], outputs: ['exec'], color: '#8b5cf6', defaultValues: {message: '"Hello"'} },
+                { name: 'log', desc: '[INFO] log message', inputs: ['message'], outputs: ['exec'], color: '#8b5cf6', defaultValues: {message: '"Info message"'} },
+                { name: 'warn', desc: '[WARN] log message', inputs: ['message'], outputs: ['exec'], color: '#f59e0b', defaultValues: {message: '"Warning"'} },
+                { name: 'error', desc: '[ERROR] log message', inputs: ['message'], outputs: ['exec'], color: '#ef4444', defaultValues: {message: '"Error occurred"'} },
+                { name: 'ask', desc: 'Prompt user for input', inputs: ['variable', 'prompt'], outputs: ['exec'], color: '#8b5cf6', defaultValues: {variable: 'answer', prompt: '"Enter value:"'} },
                 { name: 'pause', desc: 'Wait for Enter key', inputs: [], outputs: ['exec'], color: '#6366f1' },
+                { name: 'input', desc: 'Read a line into a variable', inputs: ['variable', 'prompt'], outputs: ['exec'], color: '#8b5cf6', defaultValues: {variable: 'userInput', prompt: '"Enter:"'} }
             ],
             'Variables': [
-                { name: 'global_variable', desc: 'Declare global variable(s)', inputs: ['names'], outputs: ['exec'], color: '#14b8a6' },
-                { name: 'local_variable', desc: 'Declare local variable(s)', inputs: ['names'], outputs: ['exec'], color: '#14b8a6' },
-                { name: 'assign', desc: 'Set variable = value', inputs: ['variable', 'value'], outputs: ['exec'], color: '#14b8a6' },
+                { name: 'global_variable', desc: 'Declare global variable(s)', inputs: ['names'], outputs: ['exec'], color: '#14b8a6', defaultValues: {names: 'myVar'} },
+                { name: 'local_variable', desc: 'Declare local variable(s)', inputs: ['names'], outputs: ['exec'], color: '#14b8a6', defaultValues: {names: 'localVar'} },
+                { name: 'assign', desc: 'Set variable = value', inputs: ['variable', 'value'], outputs: ['exec'], color: '#14b8a6', defaultValues: {variable: 'x', value: '10'} },
+                { name: 'incr', desc: 'Increment variable', inputs: ['variable', 'amount'], outputs: ['exec'], color: '#14b8a6', defaultValues: {variable: 'counter', amount: '1'} },
+                { name: 'decr', desc: 'Decrement variable', inputs: ['variable', 'amount'], outputs: ['exec'], color: '#14b8a6', defaultValues: {variable: 'counter', amount: '1'} },
+                { name: 'copy', desc: 'Copy variable', inputs: ['src', 'dst'], outputs: ['exec'], color: '#14b8a6', defaultValues: {src: 'source', dst: 'dest'} }
             ],
-            'File Operations': [
-                { name: 'copy', desc: 'Copy file or folder', inputs: ['source', 'destination'], outputs: ['exec'], color: '#3b82f6' },
-                { name: 'move', desc: 'Move file or folder', inputs: ['source', 'destination'], outputs: ['exec'], color: '#3b82f6' },
-                { name: 'delete', desc: 'Delete file or folder', inputs: ['path'], outputs: ['exec'], color: '#ef4444' },
-                { name: 'make file', desc: 'Create a new file', inputs: ['path', 'content'], outputs: ['exec'], color: '#10b981' },
-                { name: 'make folder', desc: 'Create a new folder', inputs: ['path'], outputs: ['exec'], color: '#10b981' },
-                { name: 'make script', desc: 'Create a .do script', inputs: ['path'], outputs: ['exec'], color: '#10b981' },
-                { name: 'replace_in_file', desc: 'Find & replace in file', inputs: ['file', 'search', 'replace'], outputs: ['exec'], color: '#3b82f6' },
-                { name: 'replace_regex_in_file', desc: 'Regex replace in file', inputs: ['file', 'pattern', 'replace'], outputs: ['exec'], color: '#3b82f6' },
-                { name: 'read_file', desc: 'Read file to variable', inputs: ['file', 'variable'], outputs: ['exec', 'content'], color: '#3b82f6' },
+            'Flow Control': [
+                { name: 'if', desc: 'If condition', inputs: ['condition'], outputs: ['exec'], color: '#f97316', defaultValues: {condition: 'x > 0'} },
+                { name: 'elif', desc: 'Else if condition', inputs: ['condition'], outputs: ['exec'], color: '#f97316', defaultValues: {condition: 'x < 0'} },
+                { name: 'else', desc: 'Else block', inputs: [], outputs: ['exec'], color: '#f97316' },
+                { name: 'end_if', desc: 'End if block', inputs: [], outputs: ['exec'], color: '#f97316' },
+                { name: 'goto', desc: 'Jump to label', inputs: ['label'], outputs: ['exec'], color: '#f97316', defaultValues: {label: 'myLabel'} },
+                { name: 'label', desc: 'Create label', inputs: ['name'], outputs: ['exec'], color: '#64748b', defaultValues: {name: 'myLabel'} },
             ],
-            'Control Flow': [
-                { name: 'if / end_if', desc: 'Conditional block', inputs: ['condition'], outputs: ['true', 'false'], color: '#ec4899' },
-                { name: 'for_each / end_for', desc: 'Iterate over collection', inputs: ['var', 'source'], outputs: ['item', 'done'], color: '#ec4899' },
-                { name: 'for_each_line', desc: 'Iterate lines in file', inputs: ['var', 'file'], outputs: ['line', 'done'], color: '#ec4899' },
-                { name: 'loop / end_loop', desc: 'Loop N times', inputs: ['count'], outputs: ['exec', 'done'], color: '#ec4899' },
-                { name: 'repeat / end_repeat', desc: 'Repeat while condition', inputs: ['condition'], outputs: ['exec', 'done'], color: '#ec4899' },
-                { name: 'break', desc: 'Break out of loop', inputs: [], outputs: [], color: '#ef4444' },
-                { name: 'continue', desc: 'Skip to next iteration', inputs: [], outputs: [], color: '#f59e0b' },
-                { name: 'exit', desc: 'Exit script', inputs: ['code'], outputs: [], color: '#ef4444' },
+            'Loops': [
+                { name: 'for_each', desc: 'Loop through list', inputs: ['item', 'list'], outputs: ['exec'], color: '#06b6d4', defaultValues: {item: 'item', list: 'myList'} },
+                { name: 'end_for', desc: 'End for_each', inputs: [], outputs: ['exec'], color: '#06b6d4' },
+                { name: 'while', desc: 'While loop', inputs: ['condition'], outputs: ['exec'], color: '#06b6d4', defaultValues: {condition: 'x < 10'} },
+                { name: 'end_while', desc: 'End while', inputs: [], outputs: ['exec'], color: '#06b6d4' },
+                { name: 'break', desc: 'Break loop', inputs: [], outputs: ['exec'], color: '#ef4444' },
+                { name: 'continue', desc: 'Continue loop', inputs: [], outputs: ['exec'], color: '#f59e0b' }
             ],
             'Functions': [
-                { name: 'function / end_function', desc: 'Define a function', inputs: ['name', 'params'], outputs: ['exec'], color: '#a855f7' },
-                { name: 'return', desc: 'Return from function', inputs: ['value'], outputs: [], color: '#a855f7' },
-                { name: 'make a_command', desc: 'Define a macro', inputs: ['name'], outputs: ['exec'], color: '#a855f7' },
-                { name: 'run', desc: 'Run macro or shell cmd', inputs: ['command'], outputs: ['exec'], color: '#f59e0b' },
-                { name: 'capture', desc: 'Capture shell output', inputs: ['command', 'variable'], outputs: ['exec', 'output'], color: '#f59e0b' },
+                { name: 'function', desc: 'Define function', inputs: ['name'], outputs: ['exec'], color: '#7c3aed', defaultValues: {name: 'myFunction'} },
+                { name: 'end_function', desc: 'End function', inputs: [], outputs: ['exec'], color: '#7c3aed' },
+                { name: 'call', desc: 'Call function', inputs: ['name', 'args'], outputs: ['exec'], color: '#7c3aed', defaultValues: {name: 'myFunction', args: ''} },
+                { name: 'return', desc: 'Return from function', inputs: ['value'], outputs: ['exec'], color: '#7c3aed', defaultValues: {value: ''} }
             ],
-            'Process': [
-                { name: 'execute', desc: 'Run an .exe file', inputs: ['exe_path'], outputs: ['exec'], color: '#f59e0b' },
-                { name: 'do_new', desc: 'Run a new DoScript', inputs: ['script'], outputs: ['exec'], color: '#f59e0b' },
-                { name: 'kill', desc: 'Kill a process by name', inputs: ['process'], outputs: ['exec'], color: '#ef4444' },
-                { name: 'shutdown', desc: 'Shutdown Windows', inputs: ['delay_secs'], outputs: ['exec'], color: '#ef4444' },
-                { name: 'wait', desc: 'Wait N seconds', inputs: ['seconds'], outputs: ['exec'], color: '#6366f1' },
+            'File System': [
+                { name: 'make_file', desc: 'Create file', inputs: ['path'], outputs: ['exec'], color: '#16a34a', defaultValues: {path: '"output.txt"'} },
+                { name: 'delete_file', desc: 'Delete file', inputs: ['path'], outputs: ['exec'], color: '#ef4444', defaultValues: {path: '"temp.txt"'} },
+                { name: 'rename_file', desc: 'Rename file', inputs: ['old', 'new'], outputs: ['exec'], color: '#f97316', defaultValues: {old: '"old.txt"', new: '"new.txt"'} },
+                { name: 'copy_file', desc: 'Copy file', inputs: ['src', 'dst'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {src: '"source.txt"', dst: '"backup.txt"'} },
+                { name: 'move_file', desc: 'Move file', inputs: ['src', 'dst'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {src: '"file.txt"', dst: '"archive/"'} },
+                { name: 'read_file', desc: 'Read file into var', inputs: ['path', 'var'], outputs: ['exec'], color: '#64748b', defaultValues: {path: '"data.txt"', var: 'content'} },
+                { name: 'write_file', desc: 'Write text to file', inputs: ['path', 'text'], outputs: ['exec'], color: '#16a34a', defaultValues: {path: '"output.txt"', text: '"Hello"'} },
+                { name: 'append_file', desc: 'Append text to file', inputs: ['path', 'text'], outputs: ['exec'], color: '#16a34a', defaultValues: {path: '"log.txt"', text: '"New line"'} },
+                { name: 'exists', desc: 'Check path exists', inputs: ['path'], outputs: ['exec'], color: '#64748b', defaultValues: {path: '"file.txt"'} },
+                { name: 'list_dir', desc: 'List directory', inputs: ['path', 'var'], outputs: ['exec'], color: '#06b6d4', defaultValues: {path: '"."', var: 'files'} },
             ],
-            'HTTP & Network': [
-                { name: 'http_get', desc: 'HTTP GET request', inputs: ['url', 'variable'], outputs: ['exec', 'response'], color: '#06b6d4' },
-                { name: 'http_post', desc: 'HTTP POST request', inputs: ['url', 'data', 'variable'], outputs: ['exec', 'response'], color: '#06b6d4' },
-                { name: 'http_put', desc: 'HTTP PUT request', inputs: ['url', 'data', 'variable'], outputs: ['exec', 'response'], color: '#06b6d4' },
-                { name: 'http_delete', desc: 'HTTP DELETE request', inputs: ['url', 'variable'], outputs: ['exec', 'response'], color: '#06b6d4' },
-                { name: 'download', desc: 'Download file from URL', inputs: ['url', 'destination'], outputs: ['exec'], color: '#06b6d4' },
-                { name: 'upload', desc: 'Upload file to URL', inputs: ['file', 'url'], outputs: ['exec'], color: '#06b6d4' },
-                { name: 'ping', desc: 'Ping a host', inputs: ['host'], outputs: ['exec'], color: '#06b6d4' },
-                { name: 'open_link', desc: 'Open URL in browser', inputs: ['url'], outputs: ['exec'], color: '#06b6d4' },
+            'System & Shell': [
+                { name: 'run', desc: 'Run external program', inputs: ['cmd'], outputs: ['exec'], color: '#ef4444', defaultValues: {cmd: '"notepad.exe"'} },
+                { name: 'shell', desc: 'Run shell command', inputs: ['cmd'], outputs: ['exec'], color: '#ef4444', defaultValues: {cmd: '"dir"'} },
+                { name: 'sleep', desc: 'Sleep seconds', inputs: ['seconds'], outputs: ['exec'], color: '#64748b', defaultValues: {seconds: '1'} },
+                { name: 'exit', desc: 'Exit script', inputs: ['code'], outputs: [], color: '#ef4444', defaultValues: {code: '0'} },
+                { name: 'open', desc: 'Open file/folder', inputs: ['path'], outputs: ['exec'], color: '#10b981', defaultValues: {path: '"."'} }
             ],
-            'JSON': [
-                { name: 'json_read', desc: 'Read JSON file', inputs: ['file', 'variable'], outputs: ['exec', 'data'], color: '#a855f7' },
-                { name: 'json_write', desc: 'Write variable to JSON', inputs: ['variable', 'file'], outputs: ['exec'], color: '#a855f7' },
-                { name: 'json_get', desc: 'Get value from JSON var', inputs: ['source_var', 'key', 'dest_var'], outputs: ['exec', 'value'], color: '#a855f7' },
+            'Networking & IO': [
+                { name: 'http_get', desc: 'HTTP GET', inputs: ['url', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {url: '"https://api.example.com"', var: 'response'} },
+                { name: 'http_post', desc: 'HTTP POST', inputs: ['url', 'body', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {url: '"https://api.example.com"', body: '"{}"', var: 'response'} },
+                { name: 'websocket', desc: 'Open websocket', inputs: ['url'], outputs: ['exec'], color: '#06b6d4', defaultValues: {url: '"wss://example.com"'} }
             ],
-            'CSV': [
-                { name: 'csv_read', desc: 'Read CSV file', inputs: ['file', 'variable'], outputs: ['exec', 'data'], color: '#ec4899' },
-                { name: 'csv_write', desc: 'Write variable to CSV', inputs: ['variable', 'file'], outputs: ['exec'], color: '#ec4899' },
-                { name: 'csv_get', desc: 'Get CSV cell value', inputs: ['source_var', 'row', 'column', 'dest_var'], outputs: ['exec', 'value'], color: '#ec4899' },
-            ],
-            'ZIP / Archive': [
-                { name: 'zip', desc: 'Create ZIP archive', inputs: ['source', 'destination'], outputs: ['exec'], color: '#f59e0b' },
-                { name: 'unzip', desc: 'Extract ZIP archive', inputs: ['zipfile', 'destination'], outputs: ['exec'], color: '#f59e0b' },
-                { name: 'zip_list', desc: 'List files in ZIP', inputs: ['zipfile', 'variable'], outputs: ['exec', 'files'], color: '#f59e0b' },
-            ],
-            'Random': [
-                { name: 'random_number', desc: 'Generate random integer', inputs: ['min', 'max', 'variable'], outputs: ['exec', 'value'], color: '#10b981' },
-                { name: 'random_string', desc: 'Generate random string', inputs: ['length', 'variable'], outputs: ['exec', 'value'], color: '#10b981' },
-                { name: 'random_choice', desc: 'Pick random item from list', inputs: ['items', 'variable'], outputs: ['exec', 'value'], color: '#10b981' },
-            ],
-            'System Info': [
-                { name: 'system_cpu', desc: 'Get CPU usage %', inputs: ['variable'], outputs: ['exec', 'value'], color: '#64748b' },
-                { name: 'system_memory', desc: 'Get memory usage %', inputs: ['variable'], outputs: ['exec', 'value'], color: '#64748b' },
-                { name: 'system_disk', desc: 'Get disk usage %', inputs: ['path', 'variable'], outputs: ['exec', 'value'], color: '#64748b' },
-            ],
-            'PATH Management': [
-                { name: 'path add', desc: 'Add to Windows PATH', inputs: ['directory'], outputs: ['exec'], color: '#475569' },
-                { name: 'path remove', desc: 'Remove from Windows PATH', inputs: ['directory'], outputs: ['exec'], color: '#475569' },
-                { name: 'script_path add', desc: 'Add to script search path', inputs: ['directory'], outputs: ['exec'], color: '#475569' },
-                { name: 'script_path remove', desc: 'Remove from script path', inputs: ['directory'], outputs: ['exec'], color: '#475569' },
-                { name: 'script_path list', desc: 'List script search paths', inputs: [], outputs: ['exec'], color: '#475569' },
-            ],
-            'Time Variables': [
-                { name: 'time', desc: 'Unix timestamp (read-only)', inputs: [], outputs: ['value'], color: '#0ea5e9' },
-                { name: 'today', desc: 'Current date YYYY-MM-DD', inputs: [], outputs: ['value'], color: '#0ea5e9' },
-                { name: 'now', desc: 'Current time HH:MM:SS', inputs: [], outputs: ['value'], color: '#0ea5e9' },
-                { name: 'year', desc: 'Current year', inputs: [], outputs: ['value'], color: '#0ea5e9' },
-                { name: 'month', desc: 'Current month number', inputs: [], outputs: ['value'], color: '#0ea5e9' },
-                { name: 'day', desc: 'Current day number', inputs: [], outputs: ['value'], color: '#0ea5e9' },
-                { name: 'hour', desc: 'Current hour', inputs: [], outputs: ['value'], color: '#0ea5e9' },
-                { name: 'minute', desc: 'Current minute', inputs: [], outputs: ['value'], color: '#0ea5e9' },
-                { name: 'second', desc: 'Current second', inputs: [], outputs: ['value'], color: '#0ea5e9' },
-            ],
+            'Utilities': [
+                { name: 'concat', desc: 'Concatenate strings', inputs: ['out', 'a', 'b'], outputs: ['exec'], color: '#64748b', defaultValues: {out: 'result', a: '"Hello"', b: '" World"'} },
+                { name: 'split', desc: 'Split string', inputs: ['out', 'str', 'sep'], outputs: ['exec'], color: '#64748b', defaultValues: {out: 'parts', str: '"a,b,c"', sep: '","'} },
+                { name: 'replace', desc: 'Replace in string', inputs: ['out', 'str', 'from', 'to'], outputs: ['exec'], color: '#64748b', defaultValues: {out: 'result', str: '"hello"', from: '"h"', to: '"H"'} },
+                { name: 'rand', desc: 'Random number', inputs: ['out', 'min', 'max'], outputs: ['exec'], color: '#f59e0b', defaultValues: {out: 'randomNum', min: '1', max: '100'} }
+            ]
         };
 
-        // ========================================
-        // STATE
-        // ========================================
+        // --- state with Start node
         const state = {
-            nodes: [],
+            nodes: [
+                { id: 1, type: 'start', x: 80, y: 80, color: '#10b981', inputs: {}, outputs: ['exec'] }
+            ],
             connections: [],
-            nextId: 1,
+            nextId: 2,
             selectedNode: null,
             zoom: 1,
             panX: 0,
@@ -667,7 +230,7 @@
             panStartY: 0,
             isDragging: false,
             dragNodeId: null,
-            // store client (screen) start coords for drag
+            dragPointerId: null,
             dragStartClientX: 0,
             dragStartClientY: 0,
             dragNodeStartX: 0,
@@ -675,20 +238,19 @@
             isConnecting: false,
             connectFromNode: null,
             connectFromPort: null,
+            connectPointerId: null,
             tempConnectX: 0,
             tempConnectY: 0,
         };
 
-        // ========================================
-        // UTILITIES
-        // ========================================
+        // utilities
         function showToast(msg, isError = false) {
-            const toast = document.getElementById('toast');
-            toast.textContent = msg;
-            toast.style.background = isError ? '#7f1d1d' : '#1e293b';
-            toast.style.borderColor = isError ? '#991b1b' : '#334155';
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3000);
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.background = isError ? '#7f1d1d' : '#1e293b';
+            t.style.borderColor = isError ? '#991b1b' : '#334155';
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 3000);
         }
 
         function screenToCanvas(screenX, screenY) {
@@ -703,115 +265,82 @@
             const selector = `[data-node-id="${nodeId}"][data-port="${portName}"][data-is-output="${isOutput}"]`;
             const portEl = document.querySelector(selector);
             if (!portEl) return null;
-
             const rect = portEl.getBoundingClientRect();
             const canvasRect = document.getElementById('canvas-wrapper').getBoundingClientRect();
-
+            const screenX = rect.left + rect.width / 2;
+            const screenY = rect.top + rect.height / 2;
             return {
-                x: (rect.left - canvasRect.left + rect.width / 2 - state.panX) / state.zoom,
-                y: (rect.top - canvasRect.top + rect.height / 2 - state.panY) / state.zoom
+                x: (screenX - canvasRect.left - state.panX) / state.zoom,
+                y: (screenY - canvasRect.top - state.panY) / state.zoom
             };
         }
 
-        function createBezierPath(x1, y1, x2, y2) {
-            const dx = Math.abs(x2 - x1);
-            const offset = Math.min(dx * 0.5, 150);
-            return `M ${x1} ${y1} C ${x1 + offset} ${y1}, ${x2 - offset} ${y2}, ${x2} ${y2}`;
+        function createBezierPath(x1,y1,x2,y2) {
+            const dx = Math.abs(x2-x1);
+            const offset = Math.min(dx*0.5, 150);
+            return `M ${x1} ${y1} C ${x1+offset} ${y1}, ${x2-offset} ${y2}, ${x2} ${y2}`;
         }
 
-        // ========================================
-        // SIDEBAR
-        // ========================================
-        function renderSidebar(filter = '') {
+        // render sidebar
+        function renderSidebar(filter='') {
             const list = document.getElementById('commands-list');
             list.innerHTML = '';
-
             const lowerFilter = filter.toLowerCase();
-
-            for (const [category, commands] of Object.entries(COMMANDS)) {
-                const filtered = filter
-                    ? commands.filter(c => c.name.toLowerCase().includes(lowerFilter) || c.desc.toLowerCase().includes(lowerFilter))
-                    : commands;
-
-                if (filtered.length === 0) continue;
-
-                const catDiv = document.createElement('div');
-                catDiv.className = 'category';
-
-                const catTitle = document.createElement('h3');
-                catTitle.textContent = category;
-                catDiv.appendChild(catTitle);
-
+            for (const [category, cmds] of Object.entries(COMMANDS)) {
+                const filtered = filter ? cmds.filter(c => c.name.toLowerCase().includes(lowerFilter) || c.desc.toLowerCase().includes(lowerFilter)) : cmds;
+                if (!filtered.length) continue;
+                const catDiv = document.createElement('div'); catDiv.className='category';
+                const title = document.createElement('h3'); title.textContent = category; catDiv.appendChild(title);
                 filtered.forEach(cmd => {
-                    const btn = document.createElement('button');
-                    btn.className = 'cmd-button';
-                    btn.style.borderLeftColor = cmd.color;
-                    btn.innerHTML = `
-                        <div class="cmd-name">${cmd.name}</div>
-                        <div class="cmd-desc">${cmd.desc}</div>
-                    `;
-                    btn.addEventListener('click', () => createNode(cmd));
+                    const btn = document.createElement('button'); btn.className='cmd-button';
+                    btn.innerHTML = `<div class="cmd-name">${cmd.name}</div><div class="cmd-desc">${cmd.desc}</div>`;
+                    btn.addEventListener('click', () => {
+                        const canvasRect = document.getElementById('canvas-wrapper').getBoundingClientRect();
+                        const cx = (canvasRect.width/2 - state.panX)/state.zoom;
+                        const cy = (canvasRect.height/2 - state.panY)/state.zoom;
+                        
+                        // Build inputs object with default values
+                        const inputs = {};
+                        if (cmd.inputs && cmd.inputs.length > 0) {
+                            cmd.inputs.forEach(key => {
+                                inputs[key] = (cmd.defaultValues && cmd.defaultValues[key]) ? cmd.defaultValues[key] : '';
+                            });
+                        }
+                        
+                        state.nodes.push({
+                            id: state.nextId++,
+                            type: cmd.name,
+                            x: cx,
+                            y: cy,
+                            color: cmd.color,
+                            inputs: inputs,
+                            outputs: cmd.outputs || []
+                        });
+                        render();
+                    });
                     catDiv.appendChild(btn);
                 });
-
                 list.appendChild(catDiv);
             }
         }
 
-        // ========================================
-        // NODES
-        // ========================================
-        function createStartNode() {
-            state.nodes.push({
-                id: state.nextId++,
-                type: 'start',
-                x: 120,
-                y: 120,
-                color: '#10b981',
-                inputs: {},
-                outputs: ['exec']
-            });
-        }
-
-        function createNode(cmd) {
-            const node = {
-                id: state.nextId++,
-                type: cmd.name,
-                x: 300 + Math.random() * 60,
-                y: 150 + Math.random() * 60,
-                color: cmd.color,
-                inputs: {},
-                outputs: cmd.outputs
-            };
-
-            cmd.inputs.forEach(inp => {
-                node.inputs[inp] = '';
-            });
-
-            state.nodes.push(node);
-            render();
-        }
-
-        function deleteNode(nodeId) {
-            state.nodes = state.nodes.filter(n => n.id !== nodeId);
-            state.connections = state.connections.filter(c => c.from !== nodeId && c.to !== nodeId);
-            if (state.selectedNode === nodeId) {
-                state.selectedNode = null;
-            }
-            render();
-        }
-
-        function deleteConnection(connId) {
-            state.connections = state.connections.filter(c => c.id !== connId);
-            render();
-        }
-
-        // ========================================
-        // RENDERING
-        // ========================================
         function applyTransform(el) {
             el.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
             el.style.transformOrigin = '0 0';
+        }
+
+        function deleteNode(id) {
+            const isStart = state.nodes.some(n => n.id===id && n.type==='start');
+            if (isStart) { showToast('✋ Start node cannot be deleted', true); return; }
+            state.nodes = state.nodes.filter(n=>n.id!==id);
+            state.connections = state.connections.filter(c=>c.from!==id && c.to!==id);
+            if (state.selectedNode===id) state.selectedNode=null;
+            render();
+        }
+
+        function deleteConnection(id) {
+            state.connections = state.connections.filter(c=>c.id!==id);
+            render();
         }
 
         function renderNodes() {
@@ -820,178 +349,119 @@
             applyTransform(container);
 
             state.nodes.forEach(node => {
-                const nodeEl = document.createElement('div');
-                nodeEl.className = 'node';
-                if (state.selectedNode === node.id) {
-                    nodeEl.classList.add('selected');
-                }
-                nodeEl.style.left = node.x + 'px';
-                nodeEl.style.top = node.y + 'px';
+                const nodeEl = document.createElement('div'); nodeEl.className='node';
+                if (state.selectedNode===node.id) nodeEl.classList.add('selected');
+                nodeEl.style.left = node.x + 'px'; nodeEl.style.top = node.y + 'px';
 
-                // Header
-                const header = document.createElement('div');
-                header.className = 'node-header';
-                header.style.backgroundColor = node.color;
+                const header = document.createElement('div'); header.className='node-header';
+                header.style.backgroundColor = node.color; header.style.touchAction='none';
 
-                const titleInput = document.createElement('input');
-                titleInput.type = 'text';
-                titleInput.className = 'node-title-input';
+                const titleInput = document.createElement('input'); titleInput.type='text'; titleInput.className='node-title-input';
                 titleInput.value = node.type === 'start' ? '▶ Start' : node.type;
                 titleInput.readOnly = node.type === 'start';
 
                 if (node.type !== 'start') {
-                    let clickCount = 0;
-                    let clickTimer = null;
-
+                    let clickCount=0, clickTimer=null;
                     titleInput.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        clickCount++;
-
-                        if (clickCount === 1) {
-                            clickTimer = setTimeout(() => {
-                                clickCount = 0;
-                            }, 300);
-                        } else if (clickCount === 2) {
-                            clearTimeout(clickTimer);
-                            clickCount = 0;
-                            titleInput.readOnly = false;
-                            titleInput.focus();
-                            titleInput.select();
-                        }
+                        e.stopPropagation(); clickCount++;
+                        if (clickCount===1) clickTimer = setTimeout(()=>{clickCount=0;},300);
+                        else if (clickCount===2){ clearTimeout(clickTimer); clickCount=0; titleInput.readOnly=false; titleInput.focus(); titleInput.select(); }
                     });
-
-                    titleInput.addEventListener('blur', () => {
-                        titleInput.readOnly = true;
-                        const newValue = titleInput.value.trim();
-                        if (newValue) {
-                            node.type = newValue;
-                        } else {
-                            titleInput.value = node.type;
-                        }
-                    });
-
-                    titleInput.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter') {
-                            titleInput.blur();
-                        } else if (e.key === 'Escape') {
-                            titleInput.value = node.type;
-                            titleInput.blur();
-                        }
-                    });
+                    titleInput.addEventListener('blur', ()=>{ titleInput.readOnly=true; const newValue = titleInput.value.trim(); if (newValue) node.type=newValue; else titleInput.value=node.type; });
+                    titleInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter') titleInput.blur(); else if (e.key==='Escape'){ titleInput.value=node.type; titleInput.blur(); } });
                 }
 
                 header.appendChild(titleInput);
 
-                // create deleteBtn optionally (declare outside to avoid scoping issues)
-                let deleteBtn = null;
                 if (node.type !== 'start') {
-                    deleteBtn = document.createElement('button');
-                    deleteBtn.className = 'node-delete-btn';
-                    deleteBtn.textContent = '×';
-                    deleteBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        deleteNode(node.id);
-                    });
+                    const deleteBtn = document.createElement('button'); deleteBtn.className='node-delete-btn'; deleteBtn.textContent='×';
+                    deleteBtn.addEventListener('click', (e)=>{ e.stopPropagation(); deleteNode(node.id); });
                     header.appendChild(deleteBtn);
                 }
 
-                // Drag handler for header
-                header.addEventListener('mousedown', (e) => {
-                    // If user clicked the delete button, ignore drag
+                // drag via header
+                header.addEventListener('pointerdown', (e)=>{
                     if (e.target.closest && e.target.closest('.node-delete-btn')) return;
-                    // If user double-clicked into editable title, ignore drag
                     if (e.target === titleInput && !titleInput.readOnly) return;
-
-                    e.stopPropagation();
-                    e.preventDefault();
-
-                    state.isDragging = true;
-                    state.dragNodeId = node.id;
-
-                    // store start client coords
-                    state.dragStartClientX = e.clientX;
-                    state.dragStartClientY = e.clientY;
-                    state.dragNodeStartX = node.x;
-                    state.dragNodeStartY = node.y;
-
-                    state.selectedNode = node.id;
-                    render();
+                    e.stopPropagation(); e.preventDefault();
+                    state.isDragging = true; state.dragNodeId = node.id; state.dragPointerId = e.pointerId;
+                    state.dragStartClientX = e.clientX; state.dragStartClientY = e.clientY;
+                    state.dragNodeStartX = node.x; state.dragNodeStartY = node.y;
+                    state.selectedNode = node.id; render();
+                    try { header.setPointerCapture(e.pointerId); } catch(_) {}
                 });
+                header.addEventListener('pointerup', (e)=>{ try{ header.releasePointerCapture(e.pointerId);}catch(_){} });
 
                 nodeEl.appendChild(header);
 
-                // Inputs
+                // Special handling: nodes with outputs but no inputs get an exec input port
+                const needsExecInput = node.outputs && node.outputs.length > 0 && Object.keys(node.inputs).length === 0 && node.type !== 'start';
+                if (needsExecInput) {
+                    const execInDiv = document.createElement('div'); 
+                    execInDiv.className='node-body';
+                    execInDiv.style.padding = '8px 10px';
+                    const row = document.createElement('div'); 
+                    row.className='input-row';
+                    row.style.justifyContent = 'flex-start';
+                    const port = document.createElement('div'); 
+                    port.className='port-in';
+                    port.setAttribute('data-node-id', node.id); 
+                    port.setAttribute('data-port', 'exec'); 
+                    port.setAttribute('data-is-output', 'false');
+                    row.appendChild(port);
+                    const label = document.createElement('span');
+                    label.style.color = '#aaa';
+                    label.style.fontSize = '10px';
+                    label.style.marginLeft = '6px';
+                    label.textContent = 'exec';
+                    row.appendChild(label);
+                    execInDiv.appendChild(row);
+                    nodeEl.appendChild(execInDiv);
+                }
+
+                // inputs
                 if (Object.keys(node.inputs).length > 0) {
-                    const body = document.createElement('div');
-                    body.className = 'node-body';
-
+                    const body = document.createElement('div'); body.className='node-body';
                     Object.keys(node.inputs).forEach(inputName => {
-                        const row = document.createElement('div');
-                        row.className = 'input-row';
-
-                        const port = document.createElement('div');
-                        port.className = 'port-in';
-                        port.setAttribute('data-node-id', node.id);
-                        port.setAttribute('data-port', inputName);
-                        port.setAttribute('data-is-output', 'false');
+                        const row = document.createElement('div'); row.className='input-row';
+                        const port = document.createElement('div'); port.className='port-in';
+                        port.setAttribute('data-node-id', node.id); port.setAttribute('data-port', inputName); port.setAttribute('data-is-output', 'false');
                         row.appendChild(port);
-
-                        const input = document.createElement('input');
-                        input.type = 'text';
-                        input.className = 'node-input';
-                        input.placeholder = inputName;
+                        const input = document.createElement('input'); input.type='text'; input.className='node-input'; input.placeholder = inputName;
                         input.value = node.inputs[inputName];
-                        input.addEventListener('input', (e) => {
-                            node.inputs[inputName] = e.target.value;
-                        });
-                        input.addEventListener('mousedown', (e) => e.stopPropagation());
-                        input.addEventListener('click', (e) => e.stopPropagation());
-                        row.appendChild(input);
-
-                        body.appendChild(row);
+                        input.addEventListener('input', (e)=>{ node.inputs[inputName] = e.target.value; });
+                        input.addEventListener('pointerdown', (e)=>e.stopPropagation());
+                        input.addEventListener('click', (e)=>e.stopPropagation());
+                        row.appendChild(input); body.appendChild(row);
                     });
-
                     nodeEl.appendChild(body);
                 }
 
-                // Outputs
+                // outputs
                 if (node.outputs && node.outputs.length > 0) {
-                    const outputsDiv = document.createElement('div');
-                    outputsDiv.className = 'node-outputs';
-
+                    const outputsDiv = document.createElement('div'); outputsDiv.className='node-outputs';
                     node.outputs.forEach(outputName => {
-                        const row = document.createElement('div');
-                        row.className = 'output-row';
+                        const row = document.createElement('div'); row.className='output-row';
+                        const label = document.createElement('span'); label.className='output-label'; label.textContent = outputName; row.appendChild(label);
+                        const port = document.createElement('div'); port.className='port-out';
+                        if (outputName === 'exec') port.classList.add('exec');
+                        port.setAttribute('data-node-id', node.id); port.setAttribute('data-port', outputName); port.setAttribute('data-is-output', 'true');
 
-                        const label = document.createElement('span');
-                        label.className = 'output-label';
-                        label.textContent = outputName;
-                        row.appendChild(label);
-
-                        const port = document.createElement('div');
-                        port.className = 'port-out';
-                        if (outputName === 'exec') {
-                            port.classList.add('exec');
-                        }
-                        port.setAttribute('data-node-id', node.id);
-                        port.setAttribute('data-port', outputName);
-                        port.setAttribute('data-is-output', 'true');
-
-                        port.addEventListener('mousedown', (e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
+                        port.addEventListener('pointerdown', (e) => {
+                            e.stopPropagation(); e.preventDefault();
                             state.isConnecting = true;
                             state.connectFromNode = node.id;
                             state.connectFromPort = outputName;
+                            state.connectPointerId = e.pointerId;
                             const canvasPos = screenToCanvas(e.clientX, e.clientY);
-                            state.tempConnectX = canvasPos.x;
-                            state.tempConnectY = canvasPos.y;
+                            state.tempConnectX = canvasPos.x; state.tempConnectY = canvasPos.y;
+                            try { port.setPointerCapture(e.pointerId); } catch(_) {}
                         });
 
-                        row.appendChild(port);
-                        outputsDiv.appendChild(row);
-                    });
+                        port.addEventListener('pointerup', (e) => { try{ port.releasePointerCapture(e.pointerId);}catch(_){} });
 
+                        row.appendChild(port); outputsDiv.appendChild(row);
+                    });
                     nodeEl.appendChild(outputsDiv);
                 }
 
@@ -1000,349 +470,100 @@
         }
 
         function renderConnections() {
-            const svg = document.getElementById('svg-layer');
-            svg.innerHTML = '';
-            applyTransform(svg);
+            const svg = document.getElementById('svg-layer'); svg.innerHTML = ''; applyTransform(svg);
 
-            // Draw existing connections
             state.connections.forEach(conn => {
                 const startPos = getPortScreenPos(conn.from, conn.fromPort, true);
                 const endPos = getPortScreenPos(conn.to, conn.toPort, false);
-
                 if (!startPos || !endPos) return;
-
-                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                const path = document.createElementNS('http://www.w3.org/2000/svg','path');
                 path.setAttribute('d', createBezierPath(startPos.x, startPos.y, endPos.x, endPos.y));
-                path.setAttribute('class', 'connection');
-                path.setAttribute('data-conn-id', conn.id);
-
-                path.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    deleteConnection(conn.id);
-                });
-
+                path.setAttribute('class','connection'); path.setAttribute('data-conn-id', conn.id);
+                path.addEventListener('click', (e)=>{ e.stopPropagation(); deleteConnection(conn.id); });
                 const tooltip = document.getElementById('tooltip');
-                path.addEventListener('mouseenter', (e) => {
-                    tooltip.style.left = (e.clientX + 10) + 'px';
-                    tooltip.style.top = (e.clientY - 30) + 'px';
-                    tooltip.classList.add('show');
-                });
-
-                path.addEventListener('mousemove', (e) => {
-                    tooltip.style.left = (e.clientX + 10) + 'px';
-                    tooltip.style.top = (e.clientY - 30) + 'px';
-                });
-
-                path.addEventListener('mouseleave', () => {
-                    tooltip.classList.remove('show');
-                });
-
+                path.addEventListener('mouseenter', (e)=>{ tooltip.style.left = (e.clientX + 10) + 'px'; tooltip.style.top = (e.clientY - 30) + 'px'; tooltip.classList.add('show'); });
+                path.addEventListener('mousemove', (e)=>{ tooltip.style.left = (e.clientX + 10) + 'px'; tooltip.style.top = (e.clientY - 30) + 'px'; });
+                path.addEventListener('mouseleave', ()=>{ tooltip.classList.remove('show'); });
                 svg.appendChild(path);
             });
 
-            // Draw temp connection
             if (state.isConnecting && state.connectFromNode !== null) {
                 const startPos = getPortScreenPos(state.connectFromNode, state.connectFromPort, true);
                 if (startPos) {
-                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
                     path.setAttribute('d', createBezierPath(startPos.x, startPos.y, state.tempConnectX, state.tempConnectY));
-                    path.setAttribute('class', 'temp-connection');
+                    path.setAttribute('class','temp-connection');
                     svg.appendChild(path);
                 }
             }
         }
 
-        function render() {
-            renderNodes();
-            // small timeout so DOM updates for nodes settle, then draw connections
-            setTimeout(renderConnections, 10);
-        }
+        function render() { renderNodes(); setTimeout(renderConnections, 8); }
 
-        // ========================================
-        // CODE GENERATION
-        // ========================================
-        function generateCode() {
-            const lines = [
-                '# Generated by DoScript Visual IDE v3',
-                '# https://github.com/TheServer-lab/DoScript',
-                ''
-            ];
-
-            const visited = new Set();
-
-            function traverse(node) {
-                if (!node || visited.has(node.id)) return;
-                visited.add(node.id);
-
-                if (node.type === 'start') {
-                    lines.push('# Script Start');
-                } else {
-                    let line = node.type;
-                    const args = Object.values(node.inputs)
-                        .map(v => {
-                            if (!v) return '';
-                            if (v.includes(' ')) return `"${v}"`;
-                            return v;
-                        })
-                        .filter(v => v)
-                        .join(' ');
-                    if (args) line += ' ' + args;
-                    lines.push(line);
-                }
-
-                const outgoing = state.connections.filter(c => c.from === node.id);
-                outgoing.forEach(conn => {
-                    const nextNode = state.nodes.find(n => n.id === conn.to);
-                    traverse(nextNode);
-                });
-            }
-
-            const startNode = state.nodes.find(n => n.type === 'start');
-            if (startNode) {
-                traverse(startNode);
-            }
-
-            return lines.join('\n');
-        }
-
-        // ========================================
-        // FILE LOADING
-        // ========================================
-        function tokenize(line) {
-            const tokens = [];
-            let current = '';
-            let inQuote = false;
-            let quoteChar = '';
-
-            for (let i = 0; i < line.length; i++) {
-                const c = line[i];
-                if ((c === '"' || c === "'") && (i === 0 || line[i - 1] !== '\\')) {
-                    if (!inQuote) {
-                        inQuote = true;
-                        quoteChar = c;
-                    } else if (c === quoteChar) {
-                        inQuote = false;
-                        quoteChar = '';
-                    } else {
-                        current += c;
-                    }
-                } else if (!inQuote && /\s/.test(c)) {
-                    if (current) {
-                        tokens.push(current);
-                        current = '';
-                    }
-                } else {
-                    current += c;
-                }
-            }
-
-            if (current) tokens.push(current);
-            return tokens;
-        }
-
-        function parseScript(text) {
-            const lines = text.split('\n');
-            const lookup = new Map();
-
-            for (const cmds of Object.values(COMMANDS)) {
-                for (const cmd of cmds) {
-                    lookup.set(cmd.name.toLowerCase(), cmd);
-                }
-            }
-
-            const parsedNodes = [];
-
-            for (const rawLine of lines) {
-                const line = rawLine.trim();
-                if (!line || line.startsWith('#')) continue;
-
-                const tokens = tokenize(line);
-                if (!tokens.length) continue;
-
-                let matchedCmd = null;
-                for (let w = Math.min(tokens.length, 3); w >= 1; w--) {
-                    const phrase = tokens.slice(0, w).join(' ').toLowerCase();
-                    if (lookup.has(phrase)) {
-                        matchedCmd = lookup.get(phrase);
-                        break;
-                    }
-                }
-
-                if (!matchedCmd && line.includes('=') && /^\w+\s*=/.test(line)) {
-                    const eqIdx = line.indexOf('=');
-                    const varName = line.slice(0, eqIdx).trim();
-                    const value = line.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '');
-                    parsedNodes.push({
-                        type: 'assign',
-                        inputs: { variable: varName, value },
-                        color: '#14b8a6',
-                        outputs: ['exec']
-                    });
-                    continue;
-                }
-
-                if (!matchedCmd) {
-                    parsedNodes.push({
-                        type: 'say',
-                        inputs: { message: line },
-                        color: '#8b5cf6',
-                        outputs: ['exec']
-                    });
-                    continue;
-                }
-
-                const cmdWordCount = matchedCmd.name.split(' ').length;
-                const argTokens = tokens.slice(cmdWordCount);
-                const inputs = {};
-                matchedCmd.inputs.forEach((inputName, i) => {
-                    inputs[inputName] = argTokens[i] || '';
-                });
-
-                parsedNodes.push({
-                    type: matchedCmd.name,
-                    inputs,
-                    color: matchedCmd.color,
-                    outputs: matchedCmd.outputs
-                });
-            }
-
-            return parsedNodes;
-        }
-
-        function loadScript(text, filename) {
-            const parsed = parseScript(text);
-            if (parsed.length === 0) {
-                showToast('No parseable commands found.', true);
-                return;
-            }
-
-            state.nodes = [];
-            state.connections = [];
-            state.nextId = 1;
-            state.panX = 0;
-            state.panY = 0;
-            state.zoom = 1;
-            document.getElementById('zoom-display').textContent = '100%';
-
-            const COLS = 3;
-            const NODE_W = 260;
-            const NODE_H = 130;
-            const GAP_X = 80;
-            const GAP_Y = 60;
-            const ORIGIN_X = 80;
-            const ORIGIN_Y = 80;
-
-            parsed.forEach((p, idx) => {
-                const col = idx % COLS;
-                const row = Math.floor(idx / COLS);
-                const x = ORIGIN_X + col * (NODE_W + GAP_X);
-                const y = ORIGIN_Y + row * (NODE_H + GAP_Y);
-
-                state.nodes.push({
-                    id: state.nextId++,
-                    type: p.type,
-                    x,
-                    y,
-                    color: p.color,
-                    inputs: p.inputs || {},
-                    outputs: p.outputs || []
-                });
-            });
-
-            // Auto-connect sequentially
-            for (let i = 0; i < state.nodes.length - 1; i++) {
-                const from = state.nodes[i];
-                const to = state.nodes[i + 1];
-                const fromOutputs = from.outputs || [];
-                const execOut = fromOutputs.find(o => o === 'exec') || fromOutputs[0];
-                const toInputs = Object.keys(to.inputs || {});
-                const toPort = toInputs[0] || 'exec';
-
-                if (execOut) {
-                    state.connections.push({
-                        id: `conn-${from.id}-${execOut}-${to.id}-${toPort}`,
-                        from: from.id,
-                        fromPort: execOut,
-                        to: to.id,
-                        toPort
-                    });
-                }
-            }
-
-            render();
-            const cmdCount = parsed.length;
-            showToast(`✅ Loaded "${filename}" — ${cmdCount} command${cmdCount !== 1 ? 's' : ''} imported`);
-        }
-
-        // ========================================
-        // EVENT HANDLERS
-        // ========================================
+        // events (pointer-based)
         function setupEvents() {
             const canvasWrapper = document.getElementById('canvas-wrapper');
 
-            // Mouse down on canvas
-            canvasWrapper.addEventListener('mousedown', (e) => {
-                const isEmptyCanvas = e.target === canvasWrapper ||
-                    e.target.id === 'grid' ||
-                    e.target.id === 'svg-layer';
-
+            canvasWrapper.addEventListener('pointerdown', (e) => {
+                const isEmptyCanvas = e.target === canvasWrapper || e.target.id === 'grid' || e.target.id === 'svg-layer';
                 if (e.button === 1 || (e.button === 0 && isEmptyCanvas)) {
                     e.preventDefault();
                     state.isPanning = true;
-                    // store pan start as difference to current pan to make movement easier
                     state.panStartX = e.clientX - state.panX;
                     state.panStartY = e.clientY - state.panY;
                     canvasWrapper.classList.add('panning');
+                    try { canvasWrapper.setPointerCapture(e.pointerId); } catch(_) {}
                 }
             });
 
-            // Mouse move
-            window.addEventListener('mousemove', (e) => {
+            // pointermove handles dragging, panning, and temp connection drawing
+            window.addEventListener('pointermove', (e) => {
                 if (state.isPanning) {
                     state.panX = e.clientX - state.panStartX;
                     state.panY = e.clientY - state.panStartY;
                     render();
-                } else if (state.isDragging && state.dragNodeId !== null) {
+                } else if (state.isDragging && state.dragNodeId !== null && e.pointerId === state.dragPointerId) {
                     const node = state.nodes.find(n => n.id === state.dragNodeId);
                     if (node) {
-                        // compute delta in screen coordinates, convert to canvas coords by dividing by zoom
                         const dx = (e.clientX - state.dragStartClientX) / state.zoom;
                         const dy = (e.clientY - state.dragStartClientY) / state.zoom;
                         node.x = state.dragNodeStartX + dx;
                         node.y = state.dragNodeStartY + dy;
                         render();
                     }
-                } else if (state.isConnecting) {
+                } else if (state.isConnecting && e.pointerId === state.connectPointerId) {
                     const canvasPos = screenToCanvas(e.clientX, e.clientY);
-                    state.tempConnectX = canvasPos.x;
-                    state.tempConnectY = canvasPos.y;
+                    state.tempConnectX = canvasPos.x; state.tempConnectY = canvasPos.y;
                     renderConnections();
                 }
             });
 
-            // Mouse up
-            window.addEventListener('mouseup', (e) => {
+            // Use elementFromPoint on pointerup to reliably detect the element under the cursor
+            window.addEventListener('pointerup', (e) => {
+                try { canvasWrapper.releasePointerCapture(e.pointerId); } catch(_) {}
                 if (state.isPanning) {
                     state.isPanning = false;
                     canvasWrapper.classList.remove('panning');
                 }
 
-                if (state.isDragging) {
-                    state.isDragging = false;
-                    state.dragNodeId = null;
+                if (state.isDragging && e.pointerId === state.dragPointerId) {
+                    state.isDragging = false; state.dragNodeId = null; state.dragPointerId = null;
                 }
 
-                if (state.isConnecting) {
-                    // Check if we're over an input port
-                    const target = e.target;
-                    if (target.classList && target.classList.contains('port-in')) {
-                        const toNodeId = parseInt(target.getAttribute('data-node-id'));
-                        const toPort = target.getAttribute('data-port');
-
+                if (state.isConnecting && e.pointerId === state.connectPointerId) {
+                    // detect element at the pointer location
+                    const el = document.elementFromPoint(e.clientX, e.clientY);
+                    let portElement = el;
+                    // if element is inside another element (could be text), walk up to find .port-in
+                    while (portElement && portElement !== document.body && !portElement.classList.contains('port-in')) {
+                        portElement = portElement.parentElement;
+                    }
+                    if (portElement && portElement.classList && portElement.classList.contains('port-in')) {
+                        const toNodeId = parseInt(portElement.getAttribute('data-node-id'));
+                        const toPort = portElement.getAttribute('data-port');
                         if (toNodeId !== state.connectFromNode) {
                             const connId = `conn-${state.connectFromNode}-${state.connectFromPort}-${toNodeId}-${toPort}`;
                             const exists = state.connections.some(c => c.id === connId);
-
                             if (!exists) {
                                 state.connections.push({
                                     id: connId,
@@ -1354,18 +575,28 @@
                             }
                         }
                     }
-
+                    // reset connecting state
                     state.isConnecting = false;
                     state.connectFromNode = null;
                     state.connectFromPort = null;
+                    state.connectPointerId = null;
                     render();
                 }
             });
 
-            // Prevent middle-click scroll
+            // pointercancel: clean up if OS/browser cancels pointer
+            window.addEventListener('pointercancel', (e) => {
+                if (state.isDragging && e.pointerId === state.dragPointerId) {
+                    state.isDragging = false; state.dragNodeId = null; state.dragPointerId = null;
+                }
+                if (state.isConnecting && e.pointerId === state.connectPointerId) {
+                    state.isConnecting = false; state.connectFromNode = null; state.connectFromPort = null; state.connectPointerId = null;
+                    render();
+                }
+            });
+
             canvasWrapper.addEventListener('auxclick', e => e.preventDefault());
 
-            // Zoom with wheel
             canvasWrapper.addEventListener('wheel', (e) => {
                 e.preventDefault();
                 const delta = e.deltaY > 0 ? -0.08 : 0.08;
@@ -1374,119 +605,245 @@
                 render();
             }, { passive: false });
 
-            // Search
-            document.getElementById('search-input').addEventListener('input', (e) => {
-                renderSidebar(e.target.value);
+            document.getElementById('search-input').addEventListener('input', (e)=> renderSidebar(e.target.value));
+
+            document.getElementById('btn-zoom-in').addEventListener('click', ()=>{ state.zoom = Math.min(3, state.zoom + 0.1); document.getElementById('zoom-display').textContent = Math.round(state.zoom*100)+'%'; render(); });
+            document.getElementById('btn-zoom-out').addEventListener('click', ()=>{ state.zoom = Math.max(0.25, state.zoom - 0.1); document.getElementById('zoom-display').textContent = Math.round(state.zoom*100)+'%'; render(); });
+
+            document.getElementById('btn-load').addEventListener('click', ()=> document.getElementById('file-input').click());
+            document.getElementById('file-input').addEventListener('change', (ev)=>{
+                const f = ev.target.files[0]; if(!f) return;
+                const reader = new FileReader();
+                reader.onload = ()=> parseAndLoadDo(reader.result, f.name);
+                reader.readAsText(f,'utf-8');
             });
 
-            // Toolbar buttons
-            document.getElementById('btn-toggle-sidebar').addEventListener('click', () => {
-                const sidebar = document.getElementById('sidebar');
-                sidebar.style.display = sidebar.style.display === 'none' ? 'flex' : 'none';
+            // Download generated .do file
+            document.getElementById('btn-download').addEventListener('click', () => {
+              try {
+                const content = generateCode();
+                if (!content || content.trim() === '' || content === '# Generated by DoScript Visual IDE\n') {
+                  showToast('Nothing to download — canvas is empty', true);
+                  return;
+                }
+                const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const ts = new Date().toISOString().replace(/[:.]/g, '-');
+                a.href = url;
+                a.download = `doscript-${ts}.do`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1500);
+                showToast(`✅ Downloaded ${a.download}`);
+              } catch (err) {
+                console.error('Download failed', err);
+                showToast('Download failed — check console', true);
+              }
             });
 
             document.getElementById('btn-generate').addEventListener('click', () => {
-                const code = generateCode();
-                document.getElementById('code-text').textContent = code;
-                document.getElementById('code-panel').classList.add('visible');
+                const panel = document.getElementById('code-panel'); panel.classList.toggle('visible');
+                if (panel.classList.contains('visible')) document.getElementById('code-text').textContent = generateCode();
             });
+            document.getElementById('code-close').addEventListener('click', ()=> document.getElementById('code-panel').classList.remove('visible'));
 
-            document.getElementById('btn-download').addEventListener('click', () => {
-                const code = generateCode();
-                const blob = new Blob([code], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'script.do';
-                a.click();
-            });
-
-            document.getElementById('btn-load').addEventListener('click', () => {
-                document.getElementById('file-input').click();
-            });
-
-            document.getElementById('file-input').addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => loadScript(ev.target.result, file.name);
-                reader.readAsText(file);
-                e.target.value = '';
-            });
-
-            document.getElementById('btn-clear').addEventListener('click', () => {
-                if (confirm('Clear all nodes and connections?')) {
-                    state.nodes = [];
-                    state.connections = [];
-                    state.nextId = 1;
-                    state.panX = 0;
-                    state.panY = 0;
-                    state.zoom = 1;
-                    document.getElementById('zoom-display').textContent = '100%';
-                    createStartNode();
-                    render();
-                }
-            });
-
-            document.getElementById('btn-reset-view').addEventListener('click', () => {
-                state.panX = 0;
-                state.panY = 0;
-                state.zoom = 1;
-                document.getElementById('zoom-display').textContent = '100%';
+            document.getElementById('btn-clear').addEventListener('click', ()=>{
+                state.nodes = [{ id:1, type:'start', x:80, y:80, color:'#10b981', inputs:{}, outputs:['exec'] }];
+                state.connections = [];
+                state.nextId = 2;
                 render();
             });
 
-            document.getElementById('btn-zoom-in').addEventListener('click', () => {
-                state.zoom = Math.min(3, state.zoom + 0.1);
-                document.getElementById('zoom-display').textContent = Math.round(state.zoom * 100) + '%';
-                render();
+            document.getElementById('btn-reset-view').addEventListener('click', ()=>{
+                state.zoom = 1; state.panX=0; state.panY=0; document.getElementById('zoom-display').textContent = Math.round(state.zoom*100)+'%'; render();
             });
 
-            document.getElementById('btn-zoom-out').addEventListener('click', () => {
-                state.zoom = Math.max(0.25, state.zoom - 0.1);
-                document.getElementById('zoom-display').textContent = Math.round(state.zoom * 100) + '%';
-                render();
-            });
-
-            document.getElementById('code-close').addEventListener('click', () => {
-                document.getElementById('code-panel').classList.remove('visible');
-            });
-
-            // Drag and drop
-            const dropOverlay = document.getElementById('drop-overlay');
-            canvasWrapper.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dropOverlay.classList.add('active');
-            });
-
-            canvasWrapper.addEventListener('dragleave', (e) => {
-                if (!canvasWrapper.contains(e.relatedTarget)) {
-                    dropOverlay.classList.remove('active');
-                }
-            });
-
-            canvasWrapper.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dropOverlay.classList.remove('active');
-                const file = e.dataTransfer.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => loadScript(ev.target.result, file.name);
-                reader.readAsText(file);
-            });
+            renderSidebar('');
         }
 
-        // ========================================
-        // INITIALIZATION
-        // ========================================
-        function init() {
-            renderSidebar();
-            createStartNode();
-            setupEvents();
-            render();
+        // parsing (minimal)
+        function tokenize(line) {
+            const tokens = []; let current=''; let inQuote=false, quoteChar='';
+            for (let i=0;i<line.length;i++){
+                const c=line[i];
+                if ((c==='"' || c==="'") && (i===0 || line[i-1] !== '\\')) {
+                    if (!inQuote) { inQuote=true; quoteChar=c; current+=c; }
+                    else if (c===quoteChar) { inQuote=false; current+=c; }
+                    else current+=c;
+                } else if (!inQuote && /\s/.test(c)) {
+                    if (current) { tokens.push(current); current=''; }
+                } else current+=c;
+            }
+            if (current) tokens.push(current); return tokens;
         }
 
-        init();
+        function parseScript(text) {
+            const lines = text.split('\n');
+            const lookup = new Map();
+            for (const cmds of Object.values(COMMANDS)) for (const cmd of cmds) lookup.set(cmd.name.toLowerCase(), cmd);
+            const parsed = [];
+            for (const rawLine of lines) {
+                const line = rawLine.trim(); if (!line || line.startsWith('#')) continue;
+                const tokens = tokenize(line); if (!tokens.length) continue;
+                const key = tokens[0].toLowerCase(); const cmd = lookup.get(key); if (!cmd) continue;
+                const node = { type: cmd.name, color: cmd.color, inputs: {}, outputs: cmd.outputs ? [...cmd.outputs] : [] };
+                
+                // Special parsing for global_variable and local_variable
+                if (key === 'global_variable' || key === 'local_variable') {
+                    // Format: global_variable = var1, var2, var3
+                    // or: global_variable = var1
+                    const restOfLine = line.substring(key.length).trim();
+                    if (restOfLine.startsWith('=')) {
+                        const varNames = restOfLine.substring(1).trim();
+                        node.inputs['names'] = varNames;
+                    } else if (tokens.length > 1) {
+                        // Legacy format without =
+                        node.inputs['names'] = tokens.slice(1).join(' ');
+                    }
+                } else {
+                    // Normal parsing for other commands
+                    if (cmd.inputs && cmd.inputs.length) {
+                        // Special case: if command has only ONE input (like 'say'), join all remaining tokens
+                        if (cmd.inputs.length === 1) {
+                            const restOfTokens = tokens.slice(1).join(' ');
+                            node.inputs[cmd.inputs[0]] = restOfTokens;
+                        } else {
+                            // Multiple inputs: map tokens to inputs by position
+                            cmd.inputs.forEach((iname, idx) => {
+                                const tok = tokens[1+idx];
+                                node.inputs[iname] = tok || '';
+                            });
+                        }
+                    }
+                }
+                parsed.push(node);
+            }
+            return parsed;
+        }
+
+        function parseAndLoadDo(text, filename) {
+            const parsed = parseScript(text);
+            const COLS=4, NODE_W=220, NODE_H=120, GAP_X=60, GAP_Y=40, ORIGIN_X=80, ORIGIN_Y=80;
+            state.nodes = [{ id:1, type:'start', x:ORIGIN_X, y:ORIGIN_Y, color:'#10b981', inputs:{}, outputs:['exec'] }];
+            state.connections = []; 
+            state.nextId = 2;
+            
+            // Create nodes
+            const createdNodeIds = [1]; // Start node
+            parsed.forEach((p, idx) => {
+                const col = idx % COLS, row = Math.floor(idx / COLS);
+                const x = ORIGIN_X + col * (NODE_W + GAP_X) + 320;
+                const y = ORIGIN_Y + row * (NODE_H + GAP_Y);
+                const nodeId = state.nextId++;
+                state.nodes.push({ id: nodeId, type: p.type, x, y, color: p.color, inputs: p.inputs || {}, outputs: p.outputs || [] });
+                createdNodeIds.push(nodeId);
+            });
+            
+            // Auto-connect nodes in sequence
+            for (let i = 0; i < createdNodeIds.length - 1; i++) {
+                const fromId = createdNodeIds[i];
+                const toId = createdNodeIds[i + 1];
+                const fromNode = state.nodes.find(n => n.id === fromId);
+                const toNode = state.nodes.find(n => n.id === toId);
+                
+                // Connect if both nodes exist and from has exec output
+                if (fromNode && toNode && fromNode.outputs && fromNode.outputs.includes('exec')) {
+                    // Determine the correct input port for the target node
+                    let toPort = 'exec';
+                    
+                    // If node has actual input parameters, connect to the first one
+                    if (toNode.inputs && Object.keys(toNode.inputs).length > 0) {
+                        toPort = Object.keys(toNode.inputs)[0];
+                    }
+                    // Otherwise, use 'exec' (for nodes like pause, else, end_if, etc.)
+                    
+                    const connId = `conn-${fromId}-exec-${toId}-${toPort}`;
+                    state.connections.push({
+                        id: connId,
+                        from: fromId,
+                        fromPort: 'exec',
+                        to: toId,
+                        toPort: toPort
+                    });
+                }
+            }
+            
+            render(); 
+            showToast(`✅ Loaded "${filename}" — ${parsed.length} command${parsed.length!==1?'s':''} imported and connected`);
+        }
+
+        function generateCode() {
+            const lines = ['# Generated by DoScript Visual IDE', ''];
+            const visited = new Set();
+            
+            function traverse(node) {
+                if (!node || visited.has(node.id)) return; 
+                visited.add(node.id);
+                
+                if (node.type === 'start') {
+                    lines.push('# Script Start');
+                } else {
+                    let line = node.type;
+                    
+                    // Special syntax for variable declarations
+                    if (node.type === 'global_variable' || node.type === 'local_variable') {
+                        const varNames = Object.values(node.inputs).filter(v => v).join(', ');
+                        if (varNames) {
+                            line += ' = ' + varNames;
+                        }
+                    } else {
+                        // Build argument list from inputs for other commands
+                        const args = [];
+                        if (node.inputs && Object.keys(node.inputs).length > 0) {
+                            Object.values(node.inputs).forEach(v => {
+                                if (v === undefined || v === null || v === '') {
+                                    // Skip empty values
+                                } else {
+                                    // If value contains spaces or curly braces and isn't already quoted, wrap in single quotes
+                                    let val = v;
+                                    if ((val.includes(' ') || val.includes('{')) && !val.startsWith('"') && !val.startsWith("'")) {
+                                        val = `'${val}'`;
+                                    }
+                                    args.push(val);
+                                }
+                            });
+                        }
+                        
+                        if (args.length > 0) {
+                            line += ' ' + args.join(' ');
+                        }
+                    }
+                    
+                    lines.push(line);
+                }
+                
+                // Follow execution path
+                const outgoing = state.connections.filter(c => c.from === node.id);
+                outgoing.forEach(conn => {
+                    const nextNode = state.nodes.find(n => n.id === conn.to);
+                    traverse(nextNode);
+                });
+            }
+            
+            const startNode = state.nodes.find(n => n.type === 'start');
+            if (startNode) {
+                traverse(startNode);
+            } else if (state.nodes.length > 0) {
+                traverse(state.nodes[0]);
+            }
+            
+            return lines.join('\n');
+        }
+
+        // boot
+        setupEvents();
+        renderSidebar('');
+        render();
+
+        // expose handy helpers
+        window.__IDE = { state, render, parseAndLoadDo };
     </script>
 </body>
 </html>
