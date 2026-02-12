@@ -990,6 +990,21 @@ class DoScriptInterpreter:
                         self.log_info(f"Created file {resolved}")
                     except Exception as e:
                         self.raise_error(FileError, f"Failed to create file '{path}': {e}")
+            else:
+                # Support simple syntax without "with" (creates empty file), like make folder
+                rest = stmt[10:].strip()
+                path = self.extract_string(rest)
+                resolved = os.path.abspath(self.resolve_path(path))
+                if self.dry_run:
+                    self.log_dry(f"make file {resolved}")
+                else:
+                    try:
+                        os.makedirs(os.path.dirname(resolved) or '.', exist_ok=True)
+                        with open(resolved, 'w', encoding='utf-8') as f:
+                            pass  # Create empty file
+                        self.log_info(f"Created file {resolved}")
+                    except Exception as e:
+                        self.raise_error(FileError, f"Failed to create file '{path}': {e}")
             return None
 
         # copy
