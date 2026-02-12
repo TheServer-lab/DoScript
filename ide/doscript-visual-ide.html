@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>DoScript Visual IDE — Fixed</title>
+    <title>DoScript Visual IDE — Complete v0.6.5</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -102,7 +102,7 @@
 <body>
     <div id="app">
         <div id="sidebar">
-            <div id="sidebar-header"><h2>Command Library</h2></div>
+            <div id="sidebar-header"><h2>Command Library v0.6.5</h2></div>
             <div id="search-box"><input id="search-input" placeholder="🔍 Search commands..." /></div>
             <div id="commands-list"></div>
         </div>
@@ -120,7 +120,7 @@
                 <button class="btn btn-secondary" id="btn-zoom-out">−</button>
                 <span class="zoom-info" id="zoom-display">100%</span>
                 <button class="btn btn-secondary" id="btn-zoom-in">+</button>
-                <span class="hint">💡 Click connections to delete • Double-click titles to edit</span>
+                <span class="hint">💡 ESC or Right-click to cancel connections • Click connections to delete • Double-click titles to edit</span>
             </div>
 
             <div id="canvas-wrapper">
@@ -141,7 +141,7 @@
     <div id="tooltip">Click to delete</div>
 
     <script>
-        // --- Full command list with FIXED definitions
+        // --- Full command list with ALL features from doscript.py v0.6.5
         const COMMANDS = {
             'Output & Input': [
                 { name: 'say', desc: 'Print a message', inputs: ['message'], outputs: ['exec'], color: '#8b5cf6', defaultValues: {message: '"Hello"'} },
@@ -155,7 +155,7 @@
             'Variables': [
                 { name: 'global_variable', desc: 'Declare global variable(s)', inputs: ['names'], outputs: ['exec'], color: '#14b8a6', defaultValues: {names: 'myVar'} },
                 { name: 'local_variable', desc: 'Declare local variable(s)', inputs: ['names'], outputs: ['exec'], color: '#14b8a6', defaultValues: {names: 'localVar'} },
-                { name: 'assign', desc: 'Set variable = value', inputs: ['variable', 'value'], outputs: ['exec'], color: '#14b8a6', defaultValues: {variable: 'x', value: '10'} },
+                { name: 'set', desc: 'variable = value', inputs: ['variable', 'value'], outputs: ['exec'], color: '#14b8a6', defaultValues: {variable: 'x', value: '10'} },
                 { name: 'incr', desc: 'Increment variable', inputs: ['variable', 'amount'], outputs: ['exec'], color: '#14b8a6', defaultValues: {variable: 'counter', amount: '1'} },
                 { name: 'decr', desc: 'Decrement variable', inputs: ['variable', 'amount'], outputs: ['exec'], color: '#14b8a6', defaultValues: {variable: 'counter', amount: '1'} },
                 { name: 'copy', desc: 'Copy variable', inputs: ['src', 'dst'], outputs: ['exec'], color: '#14b8a6', defaultValues: {src: 'source', dst: 'dest'} }
@@ -169,10 +169,14 @@
                 { name: 'label', desc: 'Create label', inputs: ['name'], outputs: ['exec'], color: '#64748b', defaultValues: {name: 'myLabel'} },
             ],
             'Loops': [
-                { name: 'for_each', desc: 'Loop through list', inputs: ['item', 'list'], outputs: ['exec'], color: '#06b6d4', defaultValues: {item: 'item', list: 'myList'} },
+                { name: 'for_each', desc: 'Loop through list/files', inputs: ['var', 'items'], outputs: ['exec'], color: '#06b6d4', defaultValues: {var: 'item', items: 'myList'} },
+                { name: 'for_each_line', desc: 'Loop through file lines', inputs: ['var', 'file'], outputs: ['exec'], color: '#06b6d4', defaultValues: {var: 'line', file: '"data.txt"'} },
                 { name: 'end_for', desc: 'End for_each', inputs: [], outputs: ['exec'], color: '#06b6d4' },
                 { name: 'while', desc: 'While loop', inputs: ['condition'], outputs: ['exec'], color: '#06b6d4', defaultValues: {condition: 'x < 10'} },
                 { name: 'end_while', desc: 'End while', inputs: [], outputs: ['exec'], color: '#06b6d4' },
+                { name: 'repeat', desc: 'Repeat N times', inputs: ['count'], outputs: ['exec'], color: '#06b6d4', defaultValues: {count: '5'} },
+                { name: 'loop', desc: 'Loop forever or N times', inputs: ['expr'], outputs: ['exec'], color: '#06b6d4', defaultValues: {expr: 'forever'} },
+                { name: 'end_loop', desc: 'End loop block', inputs: [], outputs: ['exec'], color: '#06b6d4' },
                 { name: 'break', desc: 'Break loop', inputs: [], outputs: ['exec'], color: '#ef4444' },
                 { name: 'continue', desc: 'Continue loop', inputs: [], outputs: ['exec'], color: '#f59e0b' }
             ],
@@ -183,34 +187,89 @@
                 { name: 'return', desc: 'Return from function', inputs: ['value'], outputs: ['exec'], color: '#7c3aed', defaultValues: {value: ''} }
             ],
             'File System': [
-                { name: 'make_file', desc: 'Create file', inputs: ['path'], outputs: ['exec'], color: '#16a34a', defaultValues: {path: '"output.txt"'} },
-                { name: 'delete_file', desc: 'Delete file', inputs: ['path'], outputs: ['exec'], color: '#ef4444', defaultValues: {path: '"temp.txt"'} },
-                { name: 'rename_file', desc: 'Rename file', inputs: ['old', 'new'], outputs: ['exec'], color: '#f97316', defaultValues: {old: '"old.txt"', new: '"new.txt"'} },
-                { name: 'copy_file', desc: 'Copy file', inputs: ['src', 'dst'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {src: '"source.txt"', dst: '"backup.txt"'} },
-                { name: 'move_file', desc: 'Move file', inputs: ['src', 'dst'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {src: '"file.txt"', dst: '"archive/"'} },
-                { name: 'read_file', desc: 'Read file into var', inputs: ['path', 'var'], outputs: ['exec'], color: '#64748b', defaultValues: {path: '"data.txt"', var: 'content'} },
-                { name: 'write_file', desc: 'Write text to file', inputs: ['path', 'text'], outputs: ['exec'], color: '#16a34a', defaultValues: {path: '"output.txt"', text: '"Hello"'} },
-                { name: 'append_file', desc: 'Append text to file', inputs: ['path', 'text'], outputs: ['exec'], color: '#16a34a', defaultValues: {path: '"log.txt"', text: '"New line"'} },
+                { name: 'make_file', desc: 'Create file', inputs: ['path', 'content'], outputs: ['exec'], color: '#16a34a', defaultValues: {path: '"output.txt"', content: '"Hello"'} },
+                { name: 'make_folder', desc: 'Create folder/directory', inputs: ['path'], outputs: ['exec'], color: '#16a34a', defaultValues: {path: '"new_folder"'} },
+                { name: 'delete', desc: 'Delete file/folder', inputs: ['path'], outputs: ['exec'], color: '#ef4444', defaultValues: {path: '"temp.txt"'} },
+                { name: 'rename', desc: 'Rename file', inputs: ['old', 'new'], outputs: ['exec'], color: '#f97316', defaultValues: {old: '"old.txt"', new: '"new.txt"'} },
+                { name: 'copy', desc: 'Copy file', inputs: ['src', 'dst'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {src: '"source.txt"', dst: '"backup.txt"'} },
+                { name: 'move', desc: 'Move file', inputs: ['src', 'dst'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {src: '"file.txt"', dst: '"archive/"'} },
+                { name: 'read', desc: 'Read file into var', inputs: ['path', 'var'], outputs: ['exec'], color: '#64748b', defaultValues: {path: '"data.txt"', var: 'content'} },
+                { name: 'write', desc: 'Write text to file', inputs: ['path', 'text'], outputs: ['exec'], color: '#16a34a', defaultValues: {path: '"output.txt"', text: '"Hello"'} },
+                { name: 'append', desc: 'Append text to file', inputs: ['path', 'text'], outputs: ['exec'], color: '#16a34a', defaultValues: {path: '"log.txt"', text: '"New line"'} },
                 { name: 'exists', desc: 'Check path exists', inputs: ['path'], outputs: ['exec'], color: '#64748b', defaultValues: {path: '"file.txt"'} },
                 { name: 'list_dir', desc: 'List directory', inputs: ['path', 'var'], outputs: ['exec'], color: '#06b6d4', defaultValues: {path: '"."', var: 'files'} },
+                { name: 'replace_in_file', desc: 'Replace text in file', inputs: ['path', 'find', 'replace'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"file.txt"', find: '"old"', replace: '"new"'} },
+                { name: 'replace_regex_in_file', desc: 'Regex replace in file', inputs: ['path', 'pattern', 'replace'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"file.txt"', pattern: '"\\d+"', replace: '"X"'} },
+            ],
+            'JSON Operations': [
+                { name: 'json_read', desc: 'Read JSON file', inputs: ['path', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {path: '"data.json"', var: 'jsonData'} },
+                { name: 'json_write', desc: 'Write JSON to file', inputs: ['path', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {path: '"output.json"', var: 'jsonData'} },
+                { name: 'json_get', desc: 'Get JSON key value', inputs: ['var', 'key', 'result'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {var: 'jsonData', key: '"name"', result: 'value'} }
+            ],
+            'CSV Operations': [
+                { name: 'csv_read', desc: 'Read CSV file', inputs: ['path', 'var'], outputs: ['exec'], color: '#10b981', defaultValues: {path: '"data.csv"', var: 'csvData'} },
+                { name: 'csv_write', desc: 'Write CSV to file', inputs: ['path', 'var'], outputs: ['exec'], color: '#10b981', defaultValues: {path: '"output.csv"', var: 'csvData'} },
+                { name: 'csv_get', desc: 'Get CSV cell', inputs: ['var', 'row', 'col', 'result'], outputs: ['exec'], color: '#10b981', defaultValues: {var: 'csvData', row: '0', col: '0', result: 'value'} }
+            ],
+            'Archive Operations': [
+                { name: 'zip', desc: 'Create ZIP archive', inputs: ['source', 'zipfile'], outputs: ['exec'], color: '#8b5cf6', defaultValues: {source: '"folder"', zipfile: '"archive.zip"'} },
+                { name: 'unzip', desc: 'Extract ZIP archive', inputs: ['zipfile', 'dest'], outputs: ['exec'], color: '#8b5cf6', defaultValues: {zipfile: '"archive.zip"', dest: '"extracted"'} },
+                { name: 'zip_list', desc: 'List ZIP contents', inputs: ['zipfile', 'var'], outputs: ['exec'], color: '#8b5cf6', defaultValues: {zipfile: '"archive.zip"', var: 'files'} }
             ],
             'System & Shell': [
-                { name: 'run', desc: 'Run external program', inputs: ['cmd'], outputs: ['exec'], color: '#ef4444', defaultValues: {cmd: '"notepad.exe"'} },
+                { name: 'run', desc: 'Run program/macro', inputs: ['cmd'], outputs: ['exec'], color: '#ef4444', defaultValues: {cmd: '"notepad.exe"'} },
+                { name: 'execute', desc: 'Execute .exe file', inputs: ['path'], outputs: ['exec'], color: '#ef4444', defaultValues: {path: '"program.exe"'} },
                 { name: 'shell', desc: 'Run shell command', inputs: ['cmd'], outputs: ['exec'], color: '#ef4444', defaultValues: {cmd: '"dir"'} },
-                { name: 'sleep', desc: 'Sleep seconds', inputs: ['seconds'], outputs: ['exec'], color: '#64748b', defaultValues: {seconds: '1'} },
+                { name: 'capture', desc: 'Capture command output', inputs: ['cmd', 'var'], outputs: ['exec'], color: '#64748b', defaultValues: {cmd: '"dir"', var: 'output'} },
+                { name: 'wait', desc: 'Sleep N seconds', inputs: ['seconds'], outputs: ['exec'], color: '#64748b', defaultValues: {seconds: '1'} },
                 { name: 'exit', desc: 'Exit script', inputs: ['code'], outputs: [], color: '#ef4444', defaultValues: {code: '0'} },
-                { name: 'open', desc: 'Open file/folder', inputs: ['path'], outputs: ['exec'], color: '#10b981', defaultValues: {path: '"."'} }
+                { name: 'kill', desc: 'Kill process by name', inputs: ['process'], outputs: ['exec'], color: '#ef4444', defaultValues: {process: '"notepad.exe"'} },
+                { name: 'shutdown', desc: 'Shutdown Windows', inputs: ['delay'], outputs: ['exec'], color: '#ef4444', defaultValues: {delay: '60'} },
+                { name: 'open', desc: 'Open file/folder', inputs: ['path'], outputs: ['exec'], color: '#10b981', defaultValues: {path: '"."'} },
+                { name: 'open_link', desc: 'Open URL in browser', inputs: ['url'], outputs: ['exec'], color: '#10b981', defaultValues: {url: '"https://example.com"'} },
+                { name: 'do_new', desc: 'Execute new DoScript', inputs: ['script', 'args'], outputs: ['exec'], color: '#7c3aed', defaultValues: {script: '"script.do"', args: ''} },
+                { name: 'include', desc: 'Include another script', inputs: ['path'], outputs: ['exec'], color: '#7c3aed', defaultValues: {path: '"library.do"'} }
             ],
-            'Networking & IO': [
-                { name: 'http_get', desc: 'HTTP GET', inputs: ['url', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {url: '"https://api.example.com"', var: 'response'} },
-                { name: 'http_post', desc: 'HTTP POST', inputs: ['url', 'body', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {url: '"https://api.example.com"', body: '"{}"', var: 'response'} },
-                { name: 'websocket', desc: 'Open websocket', inputs: ['url'], outputs: ['exec'], color: '#06b6d4', defaultValues: {url: '"wss://example.com"'} }
+            'System Info': [
+                { name: 'system_cpu', desc: 'Get CPU usage %', inputs: ['var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {var: 'cpuUsage'} },
+                { name: 'system_memory', desc: 'Get memory usage %', inputs: ['var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {var: 'memUsage'} },
+                { name: 'system_disk', desc: 'Get disk usage %', inputs: ['path', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {path: '"C:\\\\"', var: 'diskUsage'} }
+            ],
+            'PATH Management': [
+                { name: 'path_add', desc: 'Add to system PATH', inputs: ['path', 'scope'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"C:\\\\MyApp"', scope: '--user'} },
+                { name: 'path_remove', desc: 'Remove from PATH', inputs: ['path', 'scope'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"C:\\\\MyApp"', scope: '--user'} },
+                { name: 'script_path_add', desc: 'Add to script path', inputs: ['path'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"./libs"'} },
+                { name: 'script_path_remove', desc: 'Remove from script path', inputs: ['path'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"./libs"'} }
+            ],
+            'Networking': [
+                { name: 'download', desc: 'Download file from URL', inputs: ['url', 'path'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {url: '"https://example.com/file.zip"', path: '"download.zip"'} },
+                { name: 'upload', desc: 'Upload file to URL', inputs: ['path', 'url'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {path: '"file.txt"', url: '"https://example.com/upload"'} },
+                { name: 'ping', desc: 'Ping a host', inputs: ['host'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {host: '"google.com"'} },
+                { name: 'http_get', desc: 'HTTP GET request', inputs: ['url', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {url: '"https://api.example.com"', var: 'response'} },
+                { name: 'http_post', desc: 'HTTP POST request', inputs: ['url', 'body', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {url: '"https://api.example.com"', body: '"{}"', var: 'response'} },
+                { name: 'http_put', desc: 'HTTP PUT request', inputs: ['url', 'body', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {url: '"https://api.example.com"', body: '"{}"', var: 'response'} },
+                { name: 'http_delete', desc: 'HTTP DELETE request', inputs: ['url', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {url: '"https://api.example.com/item/1"', var: 'response'} }
+            ],
+            'Random': [
+                { name: 'random_number', desc: 'Generate random number', inputs: ['min', 'max', 'var'], outputs: ['exec'], color: '#f59e0b', defaultValues: {min: '1', max: '100', var: 'randomNum'} },
+                { name: 'random_string', desc: 'Generate random string', inputs: ['length', 'var'], outputs: ['exec'], color: '#f59e0b', defaultValues: {length: '10', var: 'randomStr'} },
+                { name: 'random_choice', desc: 'Pick random item', inputs: ['list', 'var'], outputs: ['exec'], color: '#f59e0b', defaultValues: {list: 'myList', var: 'choice'} }
             ],
             'Utilities': [
                 { name: 'concat', desc: 'Concatenate strings', inputs: ['out', 'a', 'b'], outputs: ['exec'], color: '#64748b', defaultValues: {out: 'result', a: '"Hello"', b: '" World"'} },
                 { name: 'split', desc: 'Split string', inputs: ['out', 'str', 'sep'], outputs: ['exec'], color: '#64748b', defaultValues: {out: 'parts', str: '"a,b,c"', sep: '","'} },
-                { name: 'replace', desc: 'Replace in string', inputs: ['out', 'str', 'from', 'to'], outputs: ['exec'], color: '#64748b', defaultValues: {out: 'result', str: '"hello"', from: '"h"', to: '"H"'} },
-                { name: 'rand', desc: 'Random number', inputs: ['out', 'min', 'max'], outputs: ['exec'], color: '#f59e0b', defaultValues: {out: 'randomNum', min: '1', max: '100'} }
+                { name: 'replace', desc: 'Replace in string', inputs: ['out', 'str', 'from', 'to'], outputs: ['exec'], color: '#64748b', defaultValues: {out: 'result', str: '"hello"', from: '"h"', to: '"H"'} }
+            ],
+            'Arithmetic': [
+                { name: 'add',      desc: 'result = a + b',   inputs: ['result', 'a', 'b'], outputs: ['exec'], color: '#e879f9', defaultValues: {result: 'res', a: 'x', b: 'y'} },
+                { name: 'sub',      desc: 'result = a - b',   inputs: ['result', 'a', 'b'], outputs: ['exec'], color: '#e879f9', defaultValues: {result: 'res', a: 'x', b: 'y'} },
+                { name: 'mul',      desc: 'result = a * b',   inputs: ['result', 'a', 'b'], outputs: ['exec'], color: '#e879f9', defaultValues: {result: 'res', a: 'x', b: 'y'} },
+                { name: 'div',      desc: 'result = a / b',   inputs: ['result', 'a', 'b'], outputs: ['exec'], color: '#e879f9', defaultValues: {result: 'res', a: 'x', b: 'y'} },
+                { name: 'floordiv', desc: 'result = a // b',  inputs: ['result', 'a', 'b'], outputs: ['exec'], color: '#e879f9', defaultValues: {result: 'res', a: 'x', b: 'y'} },
+                { name: 'mod',      desc: 'result = a % b',   inputs: ['result', 'a', 'b'], outputs: ['exec'], color: '#e879f9', defaultValues: {result: 'res', a: 'x', b: 'y'} },
+                { name: 'pow',      desc: 'result = a ** b',  inputs: ['result', 'a', 'b'], outputs: ['exec'], color: '#e879f9', defaultValues: {result: 'res', a: 'x', b: 'y'} },
+                { name: 'neg',      desc: 'result = -a',      inputs: ['result', 'a'],       outputs: ['exec'], color: '#e879f9', defaultValues: {result: 'res', a: 'x'} },
+                { name: 'abs',      desc: 'result = abs(a)',  inputs: ['result', 'a'],       outputs: ['exec'], color: '#e879f9', defaultValues: {result: 'res', a: 'x'} }
             ]
         };
 
@@ -248,51 +307,22 @@
             const t = document.getElementById('toast');
             t.textContent = msg;
             t.style.background = isError ? '#7f1d1d' : '#1e293b';
-            t.style.borderColor = isError ? '#991b1b' : '#334155';
             t.classList.add('show');
             setTimeout(() => t.classList.remove('show'), 3000);
         }
 
-        function screenToCanvas(screenX, screenY) {
-            const rect = document.getElementById('canvas-wrapper').getBoundingClientRect();
-            return {
-                x: (screenX - rect.left - state.panX) / state.zoom,
-                y: (screenY - rect.top - state.panY) / state.zoom
-            };
-        }
-
-        function getPortScreenPos(nodeId, portName, isOutput) {
-            const selector = `[data-node-id="${nodeId}"][data-port="${portName}"][data-is-output="${isOutput}"]`;
-            const portEl = document.querySelector(selector);
-            if (!portEl) return null;
-            const rect = portEl.getBoundingClientRect();
-            const canvasRect = document.getElementById('canvas-wrapper').getBoundingClientRect();
-            const screenX = rect.left + rect.width / 2;
-            const screenY = rect.top + rect.height / 2;
-            return {
-                x: (screenX - canvasRect.left - state.panX) / state.zoom,
-                y: (screenY - canvasRect.top - state.panY) / state.zoom
-            };
-        }
-
-        function createBezierPath(x1,y1,x2,y2) {
-            const dx = Math.abs(x2-x1);
-            const offset = Math.min(dx*0.5, 150);
-            return `M ${x1} ${y1} C ${x1+offset} ${y1}, ${x2-offset} ${y2}, ${x2} ${y2}`;
-        }
-
-        // render sidebar
-        function renderSidebar(filter='') {
+        function renderSidebar(filter = '') {
             const list = document.getElementById('commands-list');
             list.innerHTML = '';
-            const lowerFilter = filter.toLowerCase();
+            const lower = filter.toLowerCase();
             for (const [category, cmds] of Object.entries(COMMANDS)) {
-                const filtered = filter ? cmds.filter(c => c.name.toLowerCase().includes(lowerFilter) || c.desc.toLowerCase().includes(lowerFilter)) : cmds;
-                if (!filtered.length) continue;
+                const filtered = cmds.filter(c => c.name.toLowerCase().includes(lower) || c.desc.toLowerCase().includes(lower));
+                if (filtered.length === 0) continue;
                 const catDiv = document.createElement('div'); catDiv.className='category';
                 const title = document.createElement('h3'); title.textContent = category; catDiv.appendChild(title);
                 filtered.forEach(cmd => {
                     const btn = document.createElement('button'); btn.className='cmd-button';
+                    btn.style.borderColor = cmd.color;
                     btn.innerHTML = `<div class="cmd-name">${cmd.name}</div><div class="cmd-desc">${cmd.desc}</div>`;
                     btn.addEventListener('click', () => {
                         const canvasRect = document.getElementById('canvas-wrapper').getBoundingClientRect();
@@ -350,17 +380,19 @@
 
             state.nodes.forEach(node => {
                 const nodeEl = document.createElement('div'); nodeEl.className='node';
+                nodeEl.dataset.nodeId = node.id; // Add node ID for easy lookup
                 if (state.selectedNode===node.id) nodeEl.classList.add('selected');
                 nodeEl.style.left = node.x + 'px'; nodeEl.style.top = node.y + 'px';
 
                 const header = document.createElement('div'); header.className='node-header';
                 header.style.backgroundColor = node.color; header.style.touchAction='none';
 
+                const arithLabels = { 'add': '+ Add', 'sub': '− Subtract', 'mul': '× Multiply', 'div': '÷ Divide', 'floordiv': '// Floor Div', 'mod': '% Modulo', 'pow': '** Power', 'neg': '− Negate', 'abs': 'abs()' };
                 const titleInput = document.createElement('input'); titleInput.type='text'; titleInput.className='node-title-input';
-                titleInput.value = node.type === 'start' ? '▶ Start' : node.type;
-                titleInput.readOnly = node.type === 'start';
+                titleInput.value = node.type === 'start' ? '▶ Start' : (arithLabels[node.type] || node.type);
+                titleInput.readOnly = node.type === 'start' || ['add','sub','mul','div','floordiv','mod','pow','neg','abs'].includes(node.type);
 
-                if (node.type !== 'start') {
+                if (node.type !== 'start' && !['add','sub','mul','div','floordiv','mod','pow','neg','abs'].includes(node.type)) {
                     let clickCount=0, clickTimer=null;
                     titleInput.addEventListener('click', (e) => {
                         e.stopPropagation(); clickCount++;
@@ -398,71 +430,47 @@
                 const needsExecInput = node.outputs && node.outputs.length > 0 && Object.keys(node.inputs).length === 0 && node.type !== 'start';
                 if (needsExecInput) {
                     const execInDiv = document.createElement('div'); 
-                    execInDiv.className='node-body';
-                    execInDiv.style.padding = '8px 10px';
-                    const row = document.createElement('div'); 
-                    row.className='input-row';
-                    row.style.justifyContent = 'flex-start';
-                    const port = document.createElement('div'); 
-                    port.className='port-in';
-                    port.setAttribute('data-node-id', node.id); 
-                    port.setAttribute('data-port', 'exec'); 
-                    port.setAttribute('data-is-output', 'false');
-                    row.appendChild(port);
-                    const label = document.createElement('span');
-                    label.style.color = '#aaa';
-                    label.style.fontSize = '10px';
-                    label.style.marginLeft = '6px';
-                    label.textContent = 'exec';
-                    row.appendChild(label);
-                    execInDiv.appendChild(row);
-                    nodeEl.appendChild(execInDiv);
-                }
-
-                // inputs
-                if (Object.keys(node.inputs).length > 0) {
-                    const body = document.createElement('div'); body.className='node-body';
-                    Object.keys(node.inputs).forEach(inputName => {
+                    execInDiv.className = 'input-row';
+                    const execPort = document.createElement('div');
+                    execPort.className = 'port-in';
+                    execPort.addEventListener('pointerdown', (e) => startConnection(e, node.id, 'exec', true));
+                    const execLabel = document.createElement('span');
+                    execLabel.textContent = 'exec';
+                    execLabel.style.fontSize = '10px';
+                    execLabel.style.color = '#888';
+                    execInDiv.appendChild(execPort);
+                    execInDiv.appendChild(execLabel);
+                    const bodyDiv = document.createElement('div');
+                    bodyDiv.className = 'node-body';
+                    bodyDiv.appendChild(execInDiv);
+                    nodeEl.appendChild(bodyDiv);
+                } else if (node.inputs && Object.keys(node.inputs).length > 0) {
+                    const bodyDiv = document.createElement('div'); bodyDiv.className='node-body';
+                    for (const [key, val] of Object.entries(node.inputs)) {
                         const row = document.createElement('div'); row.className='input-row';
-                        const port = document.createElement('div'); port.className='port-in';
-                        port.setAttribute('data-node-id', node.id); port.setAttribute('data-port', inputName); port.setAttribute('data-is-output', 'false');
-                        row.appendChild(port);
-                        const input = document.createElement('input'); input.type='text'; input.className='node-input'; input.placeholder = inputName;
-                        input.value = node.inputs[inputName];
-                        input.addEventListener('input', (e)=>{ node.inputs[inputName] = e.target.value; });
-                        input.addEventListener('pointerdown', (e)=>e.stopPropagation());
-                        input.addEventListener('click', (e)=>e.stopPropagation());
-                        row.appendChild(input); body.appendChild(row);
-                    });
-                    nodeEl.appendChild(body);
+                        const portIn = document.createElement('div'); portIn.className='port-in';
+                        portIn.addEventListener('pointerdown', (e)=>startConnection(e, node.id, key, true));
+                        const inp = document.createElement('input'); inp.type='text'; inp.className='node-input';
+                        inp.placeholder = key; inp.value = val || '';
+                        inp.addEventListener('input', (e)=>{ node.inputs[key] = e.target.value; });
+                        row.appendChild(portIn); row.appendChild(inp);
+                        bodyDiv.appendChild(row);
+                    }
+                    nodeEl.appendChild(bodyDiv);
                 }
 
-                // outputs
                 if (node.outputs && node.outputs.length > 0) {
-                    const outputsDiv = document.createElement('div'); outputsDiv.className='node-outputs';
-                    node.outputs.forEach(outputName => {
+                    const outDiv = document.createElement('div'); outDiv.className='node-outputs';
+                    node.outputs.forEach(out => {
                         const row = document.createElement('div'); row.className='output-row';
-                        const label = document.createElement('span'); label.className='output-label'; label.textContent = outputName; row.appendChild(label);
-                        const port = document.createElement('div'); port.className='port-out';
-                        if (outputName === 'exec') port.classList.add('exec');
-                        port.setAttribute('data-node-id', node.id); port.setAttribute('data-port', outputName); port.setAttribute('data-is-output', 'true');
-
-                        port.addEventListener('pointerdown', (e) => {
-                            e.stopPropagation(); e.preventDefault();
-                            state.isConnecting = true;
-                            state.connectFromNode = node.id;
-                            state.connectFromPort = outputName;
-                            state.connectPointerId = e.pointerId;
-                            const canvasPos = screenToCanvas(e.clientX, e.clientY);
-                            state.tempConnectX = canvasPos.x; state.tempConnectY = canvasPos.y;
-                            try { port.setPointerCapture(e.pointerId); } catch(_) {}
-                        });
-
-                        port.addEventListener('pointerup', (e) => { try{ port.releasePointerCapture(e.pointerId);}catch(_){} });
-
-                        row.appendChild(port); outputsDiv.appendChild(row);
+                        const lbl = document.createElement('span'); lbl.className='output-label'; lbl.textContent=out;
+                        const portOut = document.createElement('div'); portOut.className='port-out';
+                        if (out==='exec') portOut.classList.add('exec');
+                        portOut.addEventListener('pointerdown', (e)=>startConnection(e, node.id, out, false));
+                        row.appendChild(lbl); row.appendChild(portOut);
+                        outDiv.appendChild(row);
                     });
-                    nodeEl.appendChild(outputsDiv);
+                    nodeEl.appendChild(outDiv);
                 }
 
                 container.appendChild(nodeEl);
@@ -470,255 +478,435 @@
         }
 
         function renderConnections() {
-            const svg = document.getElementById('svg-layer'); svg.innerHTML = ''; applyTransform(svg);
-
+            const svg = document.getElementById('svg-layer');
+            svg.innerHTML = '';
             state.connections.forEach(conn => {
-                const startPos = getPortScreenPos(conn.from, conn.fromPort, true);
-                const endPos = getPortScreenPos(conn.to, conn.toPort, false);
-                if (!startPos || !endPos) return;
-                const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-                path.setAttribute('d', createBezierPath(startPos.x, startPos.y, endPos.x, endPos.y));
-                path.setAttribute('class','connection'); path.setAttribute('data-conn-id', conn.id);
-                path.addEventListener('click', (e)=>{ e.stopPropagation(); deleteConnection(conn.id); });
-                const tooltip = document.getElementById('tooltip');
-                path.addEventListener('mouseenter', (e)=>{ tooltip.style.left = (e.clientX + 10) + 'px'; tooltip.style.top = (e.clientY - 30) + 'px'; tooltip.classList.add('show'); });
-                path.addEventListener('mousemove', (e)=>{ tooltip.style.left = (e.clientX + 10) + 'px'; tooltip.style.top = (e.clientY - 30) + 'px'; });
-                path.addEventListener('mouseleave', ()=>{ tooltip.classList.remove('show'); });
-                svg.appendChild(path);
+                const from = state.nodes.find(n=>n.id===conn.from);
+                const to = state.nodes.find(n=>n.id===conn.to);
+                if (!from || !to) return;
+                const fromPort = getPortPosition(from, conn.fromPort, false);
+                const toPort = getPortPosition(to, conn.toPort, true);
+                const path = createCurvePath(fromPort.x, fromPort.y, toPort.x, toPort.y);
+                const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                pathEl.setAttribute('d', path);
+                pathEl.classList.add('connection');
+                pathEl.addEventListener('click', () => {
+                    deleteConnection(conn.id);
+                    showToast('🗑️ Connection deleted');
+                });
+                svg.appendChild(pathEl);
             });
 
             if (state.isConnecting && state.connectFromNode !== null) {
-                const startPos = getPortScreenPos(state.connectFromNode, state.connectFromPort, true);
-                if (startPos) {
-                    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-                    path.setAttribute('d', createBezierPath(startPos.x, startPos.y, state.tempConnectX, state.tempConnectY));
-                    path.setAttribute('class','temp-connection');
-                    svg.appendChild(path);
+                const from = state.nodes.find(n=>n.id===state.connectFromNode);
+                if (from) {
+                    const fromPort = getPortPosition(from, state.connectFromPort, false);
+                    const path = createCurvePath(fromPort.x, fromPort.y, state.tempConnectX, state.tempConnectY);
+                    const tempPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    tempPath.setAttribute('d', path);
+                    tempPath.classList.add('temp-connection');
+                    svg.appendChild(tempPath);
                 }
+            }
+
+            applyTransform(svg);
+        }
+
+        function getPortPosition(node, portName, isInput) {
+            const NODE_W = 220;
+            const PORT_SIZE = 13;
+            const HEADER_H = 38;
+            const ROW_H = 30;
+            let offsetY = HEADER_H + ROW_H/2;
+            
+            if (isInput) {
+                const keys = Object.keys(node.inputs);
+                const idx = keys.indexOf(portName);
+                if (idx !== -1) {
+                    offsetY = HEADER_H + idx * ROW_H + ROW_H/2;
+                } else if (portName === 'exec' && keys.length === 0) {
+                    offsetY = HEADER_H + ROW_H/2;
+                }
+                return { x: node.x + PORT_SIZE/2, y: node.y + offsetY };
+            } else {
+                const outputs = node.outputs || [];
+                const idx = outputs.indexOf(portName);
+                if (idx !== -1) {
+                    const inputCount = Object.keys(node.inputs).length;
+                    const hasExecInput = node.outputs.length > 0 && inputCount === 0 && node.type !== 'start';
+                    const baseOffset = HEADER_H + (hasExecInput ? ROW_H : inputCount * ROW_H);
+                    offsetY = baseOffset + idx * ROW_H + ROW_H/2;
+                }
+                return { x: node.x + NODE_W - PORT_SIZE/2, y: node.y + offsetY };
             }
         }
 
-        function render() { renderNodes(); setTimeout(renderConnections, 8); }
+        function createCurvePath(x1, y1, x2, y2) {
+            const dx = x2 - x1;
+            const c = Math.abs(dx) * 0.5;
+            return `M ${x1} ${y1} C ${x1+c} ${y1}, ${x2-c} ${y2}, ${x2} ${y2}`;
+        }
 
-        // events (pointer-based)
+        function startConnection(e, nodeId, portName, isInput) {
+            e.stopPropagation(); e.preventDefault();
+            if (isInput) {
+                const existingConn = state.connections.find(c => c.to === nodeId && c.toPort === portName);
+                if (existingConn) {
+                    state.isConnecting = true;
+                    state.connectFromNode = existingConn.from;
+                    state.connectFromPort = existingConn.fromPort;
+                    state.connectPointerId = e.pointerId;
+                    deleteConnection(existingConn.id);
+                }
+            } else {
+                state.isConnecting = true;
+                state.connectFromNode = nodeId;
+                state.connectFromPort = portName;
+                state.connectPointerId = e.pointerId;
+            }
+            render();
+        }
+
         function setupEvents() {
-            const canvasWrapper = document.getElementById('canvas-wrapper');
+            const canvas = document.getElementById('canvas-wrapper');
+            const svg = document.getElementById('svg-layer');
 
-            canvasWrapper.addEventListener('pointerdown', (e) => {
-                const isEmptyCanvas = e.target === canvasWrapper || e.target.id === 'grid' || e.target.id === 'svg-layer';
-                if (e.button === 1 || (e.button === 0 && isEmptyCanvas)) {
-                    e.preventDefault();
-                    state.isPanning = true;
-                    state.panStartX = e.clientX - state.panX;
-                    state.panStartY = e.clientY - state.panY;
-                    canvasWrapper.classList.add('panning');
-                    try { canvasWrapper.setPointerCapture(e.pointerId); } catch(_) {}
+            document.getElementById('btn-toggle-sidebar').addEventListener('click', () => {
+                const sidebar = document.getElementById('sidebar');
+                sidebar.style.display = sidebar.style.display === 'none' ? 'flex' : 'none';
+            });
+
+            document.getElementById('btn-generate').addEventListener('click', () => {
+                const code = generateCode();
+                document.getElementById('code-text').textContent = code;
+                document.getElementById('code-panel').classList.add('visible');
+                showToast('✅ Code generated!');
+            });
+
+            document.getElementById('code-close').addEventListener('click', () => {
+                document.getElementById('code-panel').classList.remove('visible');
+            });
+
+            document.getElementById('btn-download').addEventListener('click', () => {
+                const code = generateCode();
+                const blob = new Blob([code], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'script.do';
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('⬇️ Downloaded script.do');
+            });
+
+            document.getElementById('btn-load').addEventListener('click', () => {
+                document.getElementById('file-input').click();
+            });
+
+            document.getElementById('file-input').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        parseAndLoadDo(evt.target.result, file.name);
+                    };
+                    reader.readAsText(file);
+                }
+                e.target.value = '';
+            });
+
+            document.getElementById('btn-clear').addEventListener('click', () => {
+                if (confirm('Clear all nodes and connections?')) {
+                    state.nodes = [{ id: 1, type: 'start', x: 80, y: 80, color: '#10b981', inputs: {}, outputs: ['exec'] }];
+                    state.connections = [];
+                    state.nextId = 2;
+                    render();
+                    showToast('🗑️ Canvas cleared');
                 }
             });
 
-            // pointermove handles dragging, panning, and temp connection drawing
-            window.addEventListener('pointermove', (e) => {
+            document.getElementById('btn-reset-view').addEventListener('click', () => {
+                state.zoom = 1;
+                state.panX = 0;
+                state.panY = 0;
+                document.getElementById('zoom-display').textContent = '100%';
+                render();
+                showToast('⌖ View reset');
+            });
+
+            document.getElementById('btn-zoom-in').addEventListener('click', () => {
+                state.zoom = Math.min(state.zoom * 1.1, 3);
+                document.getElementById('zoom-display').textContent = Math.round(state.zoom * 100) + '%';
+                render();
+            });
+
+            document.getElementById('btn-zoom-out').addEventListener('click', () => {
+                state.zoom = Math.max(state.zoom / 1.1, 0.3);
+                document.getElementById('zoom-display').textContent = Math.round(state.zoom * 100) + '%';
+                render();
+            });
+
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                state.zoom = Math.max(0.3, Math.min(3, state.zoom * delta));
+                document.getElementById('zoom-display').textContent = Math.round(state.zoom * 100) + '%';
+                render();
+            });
+
+            canvas.addEventListener('pointerdown', (e) => {
+                if (e.target === canvas || e.target === svg || e.target.id === 'grid') {
+                    if (state.isConnecting) {
+                        state.isConnecting = false;
+                        state.connectFromNode = null;
+                        state.connectFromPort = null;
+                        render();
+                        showToast('❌ Connection cancelled');
+                        return;
+                    }
+                    state.isPanning = true;
+                    state.panStartX = e.clientX - state.panX;
+                    state.panStartY = e.clientY - state.panY;
+                    canvas.classList.add('panning');
+                }
+            });
+
+            // Cancel connection on right-click
+            canvas.addEventListener('contextmenu', (e) => {
+                if (state.isConnecting) {
+                    e.preventDefault();
+                    state.isConnecting = false;
+                    state.connectFromNode = null;
+                    state.connectFromPort = null;
+                    render();
+                    showToast('❌ Connection cancelled');
+                }
+            });
+
+            // Cancel connection on Escape key
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && state.isConnecting) {
+                    state.isConnecting = false;
+                    state.connectFromNode = null;
+                    state.connectFromPort = null;
+                    render();
+                    showToast('❌ Connection cancelled');
+                }
+            });
+
+            canvas.addEventListener('pointerleave', (e) => {
+                // Cancel connection if pointer leaves the canvas
+                if (state.isConnecting) {
+                    state.isConnecting = false;
+                    state.connectFromNode = null;
+                    state.connectFromPort = null;
+                    render();
+                }
+            });
+
+            canvas.addEventListener('pointermove', (e) => {
                 if (state.isPanning) {
                     state.panX = e.clientX - state.panStartX;
                     state.panY = e.clientY - state.panStartY;
                     render();
-                } else if (state.isDragging && state.dragNodeId !== null && e.pointerId === state.dragPointerId) {
+                } else if (state.isConnecting) {
+                    const canvasRect = canvas.getBoundingClientRect();
+                    state.tempConnectX = (e.clientX - canvasRect.left - state.panX) / state.zoom;
+                    state.tempConnectY = (e.clientY - canvasRect.top - state.panY) / state.zoom;
+                    render();
+                } else if (state.isDragging && state.dragNodeId !== null) {
+                    const dx = (e.clientX - state.dragStartClientX) / state.zoom;
+                    const dy = (e.clientY - state.dragStartClientY) / state.zoom;
                     const node = state.nodes.find(n => n.id === state.dragNodeId);
                     if (node) {
-                        const dx = (e.clientX - state.dragStartClientX) / state.zoom;
-                        const dy = (e.clientY - state.dragStartClientY) / state.zoom;
                         node.x = state.dragNodeStartX + dx;
                         node.y = state.dragNodeStartY + dy;
                         render();
                     }
-                } else if (state.isConnecting && e.pointerId === state.connectPointerId) {
-                    const canvasPos = screenToCanvas(e.clientX, e.clientY);
-                    state.tempConnectX = canvasPos.x; state.tempConnectY = canvasPos.y;
-                    renderConnections();
                 }
             });
 
-            // Use elementFromPoint on pointerup to reliably detect the element under the cursor
-            window.addEventListener('pointerup', (e) => {
-                try { canvasWrapper.releasePointerCapture(e.pointerId); } catch(_) {}
+            canvas.addEventListener('pointerup', (e) => {
                 if (state.isPanning) {
                     state.isPanning = false;
-                    canvasWrapper.classList.remove('panning');
+                    canvas.classList.remove('panning');
                 }
-
-                if (state.isDragging && e.pointerId === state.dragPointerId) {
-                    state.isDragging = false; state.dragNodeId = null; state.dragPointerId = null;
+                if (state.isDragging) {
+                    state.isDragging = false;
+                    state.dragNodeId = null;
                 }
-
-                if (state.isConnecting && e.pointerId === state.connectPointerId) {
-                    // detect element at the pointer location
-                    const el = document.elementFromPoint(e.clientX, e.clientY);
-                    let portElement = el;
-                    // if element is inside another element (could be text), walk up to find .port-in
-                    while (portElement && portElement !== document.body && !portElement.classList.contains('port-in')) {
-                        portElement = portElement.parentElement;
-                    }
-                    if (portElement && portElement.classList && portElement.classList.contains('port-in')) {
-                        const toNodeId = parseInt(portElement.getAttribute('data-node-id'));
-                        const toPort = portElement.getAttribute('data-port');
-                        if (toNodeId !== state.connectFromNode) {
-                            const connId = `conn-${state.connectFromNode}-${state.connectFromPort}-${toNodeId}-${toPort}`;
-                            const exists = state.connections.some(c => c.id === connId);
-                            if (!exists) {
+                if (state.isConnecting) {
+                    const nodes = document.querySelectorAll('.port-in');
+                    let connectionMade = false;
+                    
+                    for (const port of nodes) {
+                        const rect = port.getBoundingClientRect();
+                        if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                            const nodeEl = port.closest('.node');
+                            const toNodeId = parseInt(nodeEl.dataset.nodeId);
+                            const toNode = state.nodes.find(n => n.id === toNodeId);
+                            
+                            if (toNode && toNode.id !== state.connectFromNode) {
+                                // Find which input port this is
+                                const inputKeys = Object.keys(toNode.inputs);
+                                let toPort = 'exec';
+                                
+                                if (inputKeys.length > 0) {
+                                    // Find the index of this port within the node
+                                    const portElements = nodeEl.querySelectorAll('.port-in');
+                                    const portIndex = Array.from(portElements).indexOf(port);
+                                    if (portIndex >= 0 && portIndex < inputKeys.length) {
+                                        toPort = inputKeys[portIndex];
+                                    }
+                                }
+                                
+                                // Remove existing connection to this port
+                                const existingConn = state.connections.find(c => c.to === toNode.id && c.toPort === toPort);
+                                if (existingConn) {
+                                    deleteConnection(existingConn.id);
+                                }
+                                
+                                // Create new connection
+                                const connId = `conn-${state.connectFromNode}-${state.connectFromPort}-${toNode.id}-${toPort}`;
                                 state.connections.push({
                                     id: connId,
                                     from: state.connectFromNode,
                                     fromPort: state.connectFromPort,
-                                    to: toNodeId,
-                                    toPort
+                                    to: toNode.id,
+                                    toPort: toPort
                                 });
+                                showToast('🔗 Connection created');
+                                connectionMade = true;
                             }
+                            break;
                         }
                     }
-                    // reset connecting state
+                    
+                    // Always clear connection state after attempting to connect
                     state.isConnecting = false;
                     state.connectFromNode = null;
                     state.connectFromPort = null;
-                    state.connectPointerId = null;
                     render();
                 }
             });
 
-            // pointercancel: clean up if OS/browser cancels pointer
-            window.addEventListener('pointercancel', (e) => {
-                if (state.isDragging && e.pointerId === state.dragPointerId) {
-                    state.isDragging = false; state.dragNodeId = null; state.dragPointerId = null;
-                }
-                if (state.isConnecting && e.pointerId === state.connectPointerId) {
-                    state.isConnecting = false; state.connectFromNode = null; state.connectFromPort = null; state.connectPointerId = null;
-                    render();
-                }
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                renderSidebar(e.target.value);
             });
 
-            canvasWrapper.addEventListener('auxclick', e => e.preventDefault());
-
-            canvasWrapper.addEventListener('wheel', (e) => {
+            // Drag and drop support
+            canvas.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                const delta = e.deltaY > 0 ? -0.08 : 0.08;
-                state.zoom = Math.max(0.25, Math.min(3, state.zoom + delta));
-                document.getElementById('zoom-display').textContent = Math.round(state.zoom * 100) + '%';
-                render();
-            }, { passive: false });
-
-            document.getElementById('search-input').addEventListener('input', (e)=> renderSidebar(e.target.value));
-
-            document.getElementById('btn-zoom-in').addEventListener('click', ()=>{ state.zoom = Math.min(3, state.zoom + 0.1); document.getElementById('zoom-display').textContent = Math.round(state.zoom*100)+'%'; render(); });
-            document.getElementById('btn-zoom-out').addEventListener('click', ()=>{ state.zoom = Math.max(0.25, state.zoom - 0.1); document.getElementById('zoom-display').textContent = Math.round(state.zoom*100)+'%'; render(); });
-
-            document.getElementById('btn-load').addEventListener('click', ()=> document.getElementById('file-input').click());
-            document.getElementById('file-input').addEventListener('change', (ev)=>{
-                const f = ev.target.files[0]; if(!f) return;
-                const reader = new FileReader();
-                reader.onload = ()=> parseAndLoadDo(reader.result, f.name);
-                reader.readAsText(f,'utf-8');
+                document.getElementById('drop-overlay').classList.add('active');
             });
 
-            // Download generated .do file
-            document.getElementById('btn-download').addEventListener('click', () => {
-              try {
-                const content = generateCode();
-                if (!content || content.trim() === '' || content === '# Generated by DoScript Visual IDE\n') {
-                  showToast('Nothing to download — canvas is empty', true);
-                  return;
+            canvas.addEventListener('dragleave', (e) => {
+                if (e.target === canvas) {
+                    document.getElementById('drop-overlay').classList.remove('active');
                 }
-                const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                const ts = new Date().toISOString().replace(/[:.]/g, '-');
-                a.href = url;
-                a.download = `doscript-${ts}.do`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                setTimeout(() => URL.revokeObjectURL(url), 1500);
-                showToast(`✅ Downloaded ${a.download}`);
-              } catch (err) {
-                console.error('Download failed', err);
-                showToast('Download failed — check console', true);
-              }
             });
 
-            document.getElementById('btn-generate').addEventListener('click', () => {
-                const panel = document.getElementById('code-panel'); panel.classList.toggle('visible');
-                if (panel.classList.contains('visible')) document.getElementById('code-text').textContent = generateCode();
+            canvas.addEventListener('drop', (e) => {
+                e.preventDefault();
+                document.getElementById('drop-overlay').classList.remove('active');
+                const file = e.dataTransfer.files[0];
+                if (file && (file.name.endsWith('.do') || file.name.endsWith('.txt'))) {
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        parseAndLoadDo(evt.target.result, file.name);
+                    };
+                    reader.readAsText(file);
+                } else {
+                    showToast('❌ Please drop a .do or .txt file', true);
+                }
             });
-            document.getElementById('code-close').addEventListener('click', ()=> document.getElementById('code-panel').classList.remove('visible'));
-
-            document.getElementById('btn-clear').addEventListener('click', ()=>{
-                state.nodes = [{ id:1, type:'start', x:80, y:80, color:'#10b981', inputs:{}, outputs:['exec'] }];
-                state.connections = [];
-                state.nextId = 2;
-                render();
-            });
-
-            document.getElementById('btn-reset-view').addEventListener('click', ()=>{
-                state.zoom = 1; state.panX=0; state.panY=0; document.getElementById('zoom-display').textContent = Math.round(state.zoom*100)+'%'; render();
-            });
-
-            renderSidebar('');
         }
 
-        // parsing (minimal)
-        function tokenize(line) {
-            const tokens = []; let current=''; let inQuote=false, quoteChar='';
-            for (let i=0;i<line.length;i++){
-                const c=line[i];
-                if ((c==='"' || c==="'") && (i===0 || line[i-1] !== '\\')) {
-                    if (!inQuote) { inQuote=true; quoteChar=c; current+=c; }
-                    else if (c===quoteChar) { inQuote=false; current+=c; }
-                    else current+=c;
-                } else if (!inQuote && /\s/.test(c)) {
-                    if (current) { tokens.push(current); current=''; }
-                } else current+=c;
-            }
-            if (current) tokens.push(current); return tokens;
+        function render() {
+            renderNodes();
+            renderConnections();
         }
 
         function parseScript(text) {
-            const lines = text.split('\n');
-            const lookup = new Map();
-            for (const cmds of Object.values(COMMANDS)) for (const cmd of cmds) lookup.set(cmd.name.toLowerCase(), cmd);
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
             const parsed = [];
-            for (const rawLine of lines) {
-                const line = rawLine.trim(); if (!line || line.startsWith('#')) continue;
-                const tokens = tokenize(line); if (!tokens.length) continue;
-                const key = tokens[0].toLowerCase(); const cmd = lookup.get(key); if (!cmd) continue;
-                const node = { type: cmd.name, color: cmd.color, inputs: {}, outputs: cmd.outputs ? [...cmd.outputs] : [] };
+            
+            // Find all command definitions
+            const allCommands = [];
+            for (const cmds of Object.values(COMMANDS)) {
+                allCommands.push(...cmds);
+            }
+            
+            for (const line of lines) {
+                const tokens = line.split(/\s+/);
+                const cmdName = tokens[0];
                 
-                // Special parsing for global_variable and local_variable
-                if (key === 'global_variable' || key === 'local_variable') {
-                    // Format: global_variable = var1, var2, var3
-                    // or: global_variable = var1
-                    const restOfLine = line.substring(key.length).trim();
-                    if (restOfLine.startsWith('=')) {
-                        const varNames = restOfLine.substring(1).trim();
-                        node.inputs['names'] = varNames;
-                    } else if (tokens.length > 1) {
-                        // Legacy format without =
-                        node.inputs['names'] = tokens.slice(1).join(' ');
-                    }
-                } else {
-                    // Normal parsing for other commands
-                    if (cmd.inputs && cmd.inputs.length) {
-                        // Special case: if command has only ONE input (like 'say'), join all remaining tokens
+                // Find matching command
+                const cmd = allCommands.find(c => c.name === cmdName);
+                if (cmd) {
+                    const node = {
+                        type: cmd.name,
+                        color: cmd.color,
+                        outputs: cmd.outputs || [],
+                        inputs: {}
+                    };
+                    
+                    // Parse inputs
+                    if (cmd.inputs && cmd.inputs.length > 0) {
                         if (cmd.inputs.length === 1) {
                             const restOfTokens = tokens.slice(1).join(' ');
                             node.inputs[cmd.inputs[0]] = restOfTokens;
                         } else {
-                            // Multiple inputs: map tokens to inputs by position
                             cmd.inputs.forEach((iname, idx) => {
                                 const tok = tokens[1+idx];
                                 node.inputs[iname] = tok || '';
                             });
                         }
                     }
+                    parsed.push(node);
+                } else {
+                    // Handle variable declarations and arithmetic assignments
+                    if (line.includes(' = ')) {
+                        const eqIdx = line.indexOf(' = ');
+                        const lhs = line.slice(0, eqIdx).trim();
+                        const rhs = line.slice(eqIdx + 3).trim();
+                        if (lhs === 'global_variable') {
+                            parsed.push({ type: 'global_variable', color: '#14b8a6', outputs: ['exec'], inputs: { names: rhs } });
+                        } else if (lhs === 'local_variable') {
+                            parsed.push({ type: 'local_variable', color: '#14b8a6', outputs: ['exec'], inputs: { names: rhs } });
+                        } else {
+                            // Detect arithmetic operator
+                            let arithType = null, a = '', b = '';
+                            const binOps = [
+                                { op: ' ** ', type: 'pow' },
+                                { op: ' // ', type: 'floordiv' },
+                                { op: ' + ',  type: 'add' },
+                                { op: ' - ',  type: 'sub' },
+                                { op: ' * ',  type: 'mul' },
+                                { op: ' / ',  type: 'div' },
+                                { op: ' % ',  type: 'mod' },
+                            ];
+                            for (const {op, type} of binOps) {
+                                const i = rhs.indexOf(op);
+                                if (i !== -1) { arithType = type; a = rhs.slice(0,i).trim(); b = rhs.slice(i+op.length).trim(); break; }
+                            }
+                            if (!arithType && rhs.startsWith('-')) {
+                                arithType = 'neg'; a = rhs.slice(1).trim();
+                            }
+                            if (!arithType && rhs.startsWith('abs(') && rhs.endsWith(')')) {
+                                arithType = 'abs'; a = rhs.slice(4,-1).trim();
+                            }
+                            if (arithType) {
+                                const inputs = { result: lhs, a };
+                                if (b) inputs.b = b;
+                                parsed.push({ type: arithType, color: '#e879f9', outputs: ['exec'], inputs });
+                            } else {
+                                // Generic assignment node
+                                parsed.push({ type: 'set', color: '#14b8a6', outputs: ['exec'], inputs: { variable: lhs, value: rhs } });
+                            }
+                        }
+                    }
                 }
-                parsed.push(node);
             }
             return parsed;
         }
@@ -731,7 +919,7 @@
             state.nextId = 2;
             
             // Create nodes
-            const createdNodeIds = [1]; // Start node
+            const createdNodeIds = [1];
             parsed.forEach((p, idx) => {
                 const col = idx % COLS, row = Math.floor(idx / COLS);
                 const x = ORIGIN_X + col * (NODE_W + GAP_X) + 320;
@@ -748,16 +936,11 @@
                 const fromNode = state.nodes.find(n => n.id === fromId);
                 const toNode = state.nodes.find(n => n.id === toId);
                 
-                // Connect if both nodes exist and from has exec output
                 if (fromNode && toNode && fromNode.outputs && fromNode.outputs.includes('exec')) {
-                    // Determine the correct input port for the target node
                     let toPort = 'exec';
-                    
-                    // If node has actual input parameters, connect to the first one
                     if (toNode.inputs && Object.keys(toNode.inputs).length > 0) {
                         toPort = Object.keys(toNode.inputs)[0];
                     }
-                    // Otherwise, use 'exec' (for nodes like pause, else, end_if, etc.)
                     
                     const connId = `conn-${fromId}-exec-${toId}-${toPort}`;
                     state.connections.push({
@@ -775,7 +958,7 @@
         }
 
         function generateCode() {
-            const lines = ['# Generated by DoScript Visual IDE', ''];
+            const lines = ['# Generated by DoScript Visual IDE v0.6.5', ''];
             const visited = new Set();
             
             function traverse(node) {
@@ -787,26 +970,39 @@
                 } else {
                     let line = node.type;
                     
-                    // Special syntax for variable declarations
-                    if (node.type === 'global_variable' || node.type === 'local_variable') {
+                    // Arithmetic nodes → emit as assignment
+                    const arithOps = {
+                        'add':      (r,a,b) => `${r} = ${a} + ${b}`,
+                        'sub':      (r,a,b) => `${r} = ${a} - ${b}`,
+                        'mul':      (r,a,b) => `${r} = ${a} * ${b}`,
+                        'div':      (r,a,b) => `${r} = ${a} / ${b}`,
+                        'floordiv': (r,a,b) => `${r} = ${a} // ${b}`,
+                        'mod':      (r,a,b) => `${r} = ${a} % ${b}`,
+                        'pow':      (r,a,b) => `${r} = ${a} ** ${b}`,
+                        'neg':      (r,a)   => `${r} = -${a}`,
+                        'abs':      (r,a)   => `${r} = abs(${a})`,
+                    };
+                    if (arithOps[node.type]) {
+                        const v = node.inputs;
+                        line = arithOps[node.type](v.result||'res', v.a||'0', v.b||'0');
+                    } else if (node.type === 'global_variable' || node.type === 'local_variable') {
+                        // Special syntax for variable declarations
                         const varNames = Object.values(node.inputs).filter(v => v).join(', ');
                         if (varNames) {
                             line += ' = ' + varNames;
                         }
+                    } else if (node.type === 'set') {
+                        // Emit as: variable = value
+                        line = `${node.inputs.variable || 'x'} = ${node.inputs.value || '0'}`;
                     } else {
-                        // Build argument list from inputs for other commands
+                        // Build argument list from inputs
                         const args = [];
                         if (node.inputs && Object.keys(node.inputs).length > 0) {
                             Object.values(node.inputs).forEach(v => {
                                 if (v === undefined || v === null || v === '') {
                                     // Skip empty values
                                 } else {
-                                    // If value contains spaces or curly braces and isn't already quoted, wrap in single quotes
-                                    let val = v;
-                                    if ((val.includes(' ') || val.includes('{')) && !val.startsWith('"') && !val.startsWith("'")) {
-                                        val = `'${val}'`;
-                                    }
-                                    args.push(val);
+                                    args.push(v);
                                 }
                             });
                         }
@@ -842,7 +1038,6 @@
         renderSidebar('');
         render();
 
-        // expose handy helpers
         window.__IDE = { state, render, parseAndLoadDo };
     </script>
 </body>
