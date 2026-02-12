@@ -50,7 +50,7 @@
         #canvas-wrapper.panning { cursor:grabbing; }
         #grid { position:absolute; top:0; left:0; width:100%; height:100%; background-image: linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px); background-size:20px 20px; }
 
-        #svg-layer { position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; pointer-events:auto; }
+        #svg-layer { position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; pointer-events:auto; overflow:visible; }
         #nodes-layer { position:absolute; top:0; left:0; z-index:2; }
 
         .node { position:absolute; min-width:200px; max-width:240px; background:#2a2a2a; border:2px solid #444; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.5); cursor:move; user-select:none; touch-action:none; }
@@ -694,16 +694,6 @@
                 }
             });
 
-            canvas.addEventListener('pointerleave', (e) => {
-                // Cancel connection if pointer leaves the canvas
-                if (state.isConnecting) {
-                    state.isConnecting = false;
-                    state.connectFromNode = null;
-                    state.connectFromPort = null;
-                    render();
-                }
-            });
-
             canvas.addEventListener('pointermove', (e) => {
                 if (state.isPanning) {
                     state.panX = e.clientX - state.panStartX;
@@ -735,51 +725,70 @@
                     state.isDragging = false;
                     state.dragNodeId = null;
                 }
+            });
+
+            // Handle connection completion at document level to ensure it always fires
+            document.addEventListener('pointerup', (e) => {
                 if (state.isConnecting) {
-                    const nodes = document.querySelectorAll('.port-in');
-                    let connectionMade = false;
+                    e.stopPropagation(); // Prevent other handlers from interfering
                     
-                    for (const port of nodes) {
-                        const rect = port.getBoundingClientRect();
-                        if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
-                            const nodeEl = port.closest('.node');
-                            const toNodeId = parseInt(nodeEl.dataset.nodeId);
-                            const toNode = state.nodes.find(n => n.id === toNodeId);
+                    // Convert mouse position to canvas space
+                    const canvas = document.getElementById('canvas-wrapper');
+                    const canvasRect = canvas.getBoundingClientRect();
+                    const mouseCanvasX = (e.clientX - canvasRect.left - state.panX) / state.zoom;
+                    const mouseCanvasY = (e.clientY - canvasRect.top - state.panY) / state.zoom;
+                    
+                    let connectionMade = false;
+                    const SNAP_DISTANCE = 35; // Distance in canvas pixels to snap to a port
+                    
+                    // Check each node's input ports
+                    for (const toNode of state.nodes) {
+                        if (toNode.id === state.connectFromNode) continue; // Can't connect to self
+                        
+                        // Check if node has inputs
+                        const inputKeys = Object.keys(toNode.inputs || {});
+                        const hasExecInput = toNode.outputs && toNode.outputs.length > 0 && inputKeys.length === 0 && toNode.type !== 'start';
+                        
+                        // Build list of input ports to check
+                        const portsToCheck = [];
+                        if (hasExecInput) {
+                            portsToCheck.push({ name: 'exec', index: 0 });
+                        } else if (inputKeys.length > 0) {
+                            inputKeys.forEach((key, index) => {
+                                portsToCheck.push({ name: key, index: index });
+                            });
+                        }
+                        
+                        // Check each input port
+                        for (const portInfo of portsToCheck) {
+                            const portPos = getPortPosition(toNode, portInfo.name, true);
+                            const dx = mouseCanvasX - portPos.x;
+                            const dy = mouseCanvasY - portPos.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
                             
-                            if (toNode && toNode.id !== state.connectFromNode) {
-                                // Find which input port this is
-                                const inputKeys = Object.keys(toNode.inputs);
-                                let toPort = 'exec';
-                                
-                                if (inputKeys.length > 0) {
-                                    // Find the index of this port within the node
-                                    const portElements = nodeEl.querySelectorAll('.port-in');
-                                    const portIndex = Array.from(portElements).indexOf(port);
-                                    if (portIndex >= 0 && portIndex < inputKeys.length) {
-                                        toPort = inputKeys[portIndex];
-                                    }
-                                }
-                                
+                            if (distance <= SNAP_DISTANCE) {
                                 // Remove existing connection to this port
-                                const existingConn = state.connections.find(c => c.to === toNode.id && c.toPort === toPort);
+                                const existingConn = state.connections.find(c => c.to === toNode.id && c.toPort === portInfo.name);
                                 if (existingConn) {
                                     deleteConnection(existingConn.id);
                                 }
                                 
                                 // Create new connection
-                                const connId = `conn-${state.connectFromNode}-${state.connectFromPort}-${toNode.id}-${toPort}`;
+                                const connId = `conn-${state.connectFromNode}-${state.connectFromPort}-${toNode.id}-${portInfo.name}`;
                                 state.connections.push({
                                     id: connId,
                                     from: state.connectFromNode,
                                     fromPort: state.connectFromPort,
                                     to: toNode.id,
-                                    toPort: toPort
+                                    toPort: portInfo.name
                                 });
                                 showToast('🔗 Connection created');
                                 connectionMade = true;
+                                break;
                             }
-                            break;
                         }
+                        
+                        if (connectionMade) break;
                     }
                     
                     // Always clear connection state after attempting to connect
@@ -836,10 +845,40 @@
             for (const cmds of Object.values(COMMANDS)) {
                 allCommands.push(...cmds);
             }
+
+            // Quote-aware tokenizer: keeps "quoted strings" as single tokens
+            function tokenize(line) {
+                const tokens = [];
+                let current = '';
+                let inQuote = false;
+                let quoteChar = '';
+                for (let i = 0; i < line.length; i++) {
+                    const ch = line[i];
+                    if (inQuote) {
+                        current += ch;
+                        if (ch === quoteChar) inQuote = false;
+                    } else if (ch === '"' || ch === "'") {
+                        inQuote = true; quoteChar = ch; current += ch;
+                    } else if (ch === ' ' || ch === '\t') {
+                        if (current) { tokens.push(current); current = ''; }
+                    } else {
+                        current += ch;
+                    }
+                }
+                if (current) tokens.push(current);
+                return tokens;
+            }
             
             for (const line of lines) {
-                const tokens = line.split(/\s+/);
+                const tokens = tokenize(line);
                 const cmdName = tokens[0];
+
+                // Handle global_variable / local_variable with " = " syntax from code generator
+                if ((cmdName === 'global_variable' || cmdName === 'local_variable') && tokens[1] === '=') {
+                    const val = tokens.slice(2).join(' ');
+                    parsed.push({ type: cmdName, color: '#14b8a6', outputs: ['exec'], inputs: { names: val } });
+                    continue;
+                }
                 
                 // Find matching command
                 const cmd = allCommands.find(c => c.name === cmdName);
@@ -851,15 +890,17 @@
                         inputs: {}
                     };
                     
-                    // Parse inputs
+                    // Parse inputs with quote-aware tokens; last input captures remaining tokens
                     if (cmd.inputs && cmd.inputs.length > 0) {
                         if (cmd.inputs.length === 1) {
-                            const restOfTokens = tokens.slice(1).join(' ');
-                            node.inputs[cmd.inputs[0]] = restOfTokens;
+                            node.inputs[cmd.inputs[0]] = tokens.slice(1).join(' ');
                         } else {
                             cmd.inputs.forEach((iname, idx) => {
-                                const tok = tokens[1+idx];
-                                node.inputs[iname] = tok || '';
+                                if (idx === cmd.inputs.length - 1) {
+                                    node.inputs[iname] = tokens.slice(1 + idx).join(' ') || '';
+                                } else {
+                                    node.inputs[iname] = tokens[1 + idx] || '';
+                                }
                             });
                         }
                     }
@@ -937,9 +978,15 @@
                 const toNode = state.nodes.find(n => n.id === toId);
                 
                 if (fromNode && toNode && fromNode.outputs && fromNode.outputs.includes('exec')) {
+                    // Use same logic as manual connection to determine target port
+                    const inputKeys = Object.keys(toNode.inputs || {});
+                    const hasExecInput = toNode.outputs && toNode.outputs.length > 0 && inputKeys.length === 0 && toNode.type !== 'start';
+                    
                     let toPort = 'exec';
-                    if (toNode.inputs && Object.keys(toNode.inputs).length > 0) {
-                        toPort = Object.keys(toNode.inputs)[0];
+                    if (hasExecInput) {
+                        toPort = 'exec';
+                    } else if (inputKeys.length > 0) {
+                        toPort = inputKeys[0];
                     }
                     
                     const connId = `conn-${fromId}-exec-${toId}-${toPort}`;
