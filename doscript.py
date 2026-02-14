@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-DoScript v0.6.5 - Execute EXE files
+DoScript v0.6.6 - Fixed URL parsing bug
 Changes:
+- Fixed comment parser to not break URLs with // inside quoted strings
+
+Previous version (0.6.5):
 - execute: Execute .exe files directly
 
 Previous version (0.6.4):
@@ -58,7 +61,7 @@ except ImportError:
     HAS_PSUTIL = False
 
 # Current interpreter version
-VERSION = "0.6.5"
+VERSION = "0.6.6"
 
 # ----------------------------
 # Script Template
@@ -498,9 +501,8 @@ class DoScriptInterpreter:
         out: List[str] = []
         cur = ""
         for line in raw:
-            # remove comments (note: simplistic - removes everything after # or //)
-            line = re.sub(r'#.*$', '', line)
-            line = re.sub(r'//.*$', '', line)
+            # remove comments (quote-aware - don't remove # or // inside strings)
+            line = self._remove_comments(line)
             line = line.rstrip('\n\r')
             t = line.strip()
             if t:
@@ -508,6 +510,40 @@ class DoScriptInterpreter:
                 out.append(cur)
                 cur = ""
         return out
+    
+    def _remove_comments(self, line: str) -> str:
+        """Remove comments but preserve # and // inside quoted strings"""
+        result = []
+        in_double_quote = False
+        in_single_quote = False
+        i = 0
+        while i < len(line):
+            char = line[i]
+            
+            # Track quote state
+            if char == '"' and not in_single_quote and (i == 0 or line[i-1] != '\\'):
+                in_double_quote = not in_double_quote
+                result.append(char)
+            elif char == "'" and not in_double_quote and (i == 0 or line[i-1] != '\\'):
+                in_single_quote = not in_single_quote
+                result.append(char)
+            # Check for comments outside quotes
+            elif not in_double_quote and not in_single_quote:
+                if char == '#':
+                    # Rest of line is comment
+                    break
+                elif char == '/' and i + 1 < len(line) and line[i + 1] == '/':
+                    # Rest of line is comment
+                    break
+                else:
+                    result.append(char)
+            else:
+                # Inside quotes, keep everything
+                result.append(char)
+            
+            i += 1
+        
+        return ''.join(result)
 
     def extract_string(self, s: str) -> str:
         s = s.strip()
