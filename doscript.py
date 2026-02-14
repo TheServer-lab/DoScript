@@ -549,10 +549,15 @@ class DoScriptInterpreter:
         s = s.strip()
         if s.startswith('"') and s.endswith('"'):
             inner = s[1:-1]
-            try:
-                return bytes(inner, "utf-8").decode("unicode_escape")
-            except Exception:
-                return inner
+            # Process escape sequences manually (in correct order) to avoid unicode_escape deprecation
+            # First, handle escaped backslashes
+            result = inner.replace('\\\\', '\x00')  # Temporary placeholder
+            result = result.replace('\\n', '\n')
+            result = result.replace('\\t', '\t')
+            result = result.replace('\\r', '\r')
+            result = result.replace('\\"', '"')
+            result = result.replace('\x00', '\\')  # Restore escaped backslashes
+            return result
         if s.startswith("'") and s.endswith("'"):
             return self.interpolate_string(s[1:-1])
         return s
