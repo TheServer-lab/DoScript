@@ -236,10 +236,10 @@
                 { name: 'system_disk', desc: 'Get disk usage %', inputs: ['path', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {path: '"C:\\\\"', var: 'diskUsage'} }
             ],
             'PATH Management': [
-                { name: 'path_add', desc: 'Add to system PATH', inputs: ['path', 'scope'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"C:\\\\MyApp"', scope: '--user'} },
-                { name: 'path_remove', desc: 'Remove from PATH', inputs: ['path', 'scope'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"C:\\\\MyApp"', scope: '--user'} },
-                { name: 'script_path_add', desc: 'Add to script path', inputs: ['path'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"./libs"'} },
-                { name: 'script_path_remove', desc: 'Remove from script path', inputs: ['path'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"./libs"'} }
+                { name: 'path add', desc: 'Add to system PATH', inputs: ['path', 'scope'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"C:\\\\MyApp"', scope: ''} },
+                { name: 'path remove', desc: 'Remove from PATH', inputs: ['path', 'scope'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"C:\\\\MyApp"', scope: ''} },
+                { name: 'script_path add', desc: 'Add to script path', inputs: ['path'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"./libs"'} },
+                { name: 'script_path remove', desc: 'Remove from script path', inputs: ['path'], outputs: ['exec'], color: '#f59e0b', defaultValues: {path: '"./libs"'} }
             ],
             'Networking': [
                 { name: 'download', desc: 'Download file from URL', inputs: ['url', 'path'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {url: '"https://example.com/file.zip"', path: '"download.zip"'} },
@@ -1140,6 +1140,36 @@
                 const zipfile = (node.inputs && node.inputs.zipfile) ? node.inputs.zipfile : '"archive.zip"';
                 const dest = (node.inputs && node.inputs.dest) ? node.inputs.dest : '"extracted"';
                 line = `unzip ${zipfile} to ${dest}`;
+
+            } else if (node.type === 'path add') {
+                // path add [--system] "path"
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"C:/MyApp"';
+                const scope = (node.inputs && node.inputs.scope) ? node.inputs.scope.trim() : '';
+                if (scope && scope.startsWith('--')) {
+                    line = `path add ${scope} ${path}`;
+                } else {
+                    line = `path add ${path}`;
+                }
+
+            } else if (node.type === 'path remove') {
+                // path remove [--system] "path"
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"C:/MyApp"';
+                const scope = (node.inputs && node.inputs.scope) ? node.inputs.scope.trim() : '';
+                if (scope && scope.startsWith('--')) {
+                    line = `path remove ${scope} ${path}`;
+                } else {
+                    line = `path remove ${path}`;
+                }
+
+            } else if (node.type === 'script_path add') {
+                // script_path add "path"
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"./libs"';
+                line = `script_path add ${path}`;
+
+            } else if (node.type === 'script_path remove') {
+                // script_path remove "path"
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"./libs"';
+                line = `script_path remove ${path}`;
 
             } else {
                 // Build argument list from inputs (default handler)
