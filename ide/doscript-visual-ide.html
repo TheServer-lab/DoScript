@@ -1056,6 +1056,91 @@
 
                 line = `make file ${p} with ${content}`;
 
+            } else if (node.type === 'download') {
+                // download "url" to "path"
+                const url = (node.inputs && node.inputs.url) ? node.inputs.url : '"https://example.com/file.zip"';
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"download.zip"';
+                line = `download ${url} to ${path}`;
+
+            } else if (node.type === 'upload') {
+                // upload "path" to "url"
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"file.txt"';
+                const url = (node.inputs && node.inputs.url) ? node.inputs.url : '"https://example.com/upload"';
+                line = `upload ${path} to ${url}`;
+
+            } else if (node.type === 'copy' && node.inputs && node.inputs.src) {
+                // copy "src" to "dst"
+                const src = node.inputs.src || '"source.txt"';
+                const dst = node.inputs.dst || '"backup.txt"';
+                line = `copy ${src} to ${dst}`;
+
+            } else if (node.type === 'move') {
+                // move "src" to "dst"
+                const src = (node.inputs && node.inputs.src) ? node.inputs.src : '"file.txt"';
+                const dst = (node.inputs && node.inputs.dst) ? node.inputs.dst : '"archive/"';
+                line = `move ${src} to ${dst}`;
+
+            } else if (node.type === 'read') {
+                // read var from "path"
+                const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'content';
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"data.txt"';
+                line = `read ${v} from ${path}`;
+
+            } else if (node.type === 'write') {
+                // write "text" to "path"
+                const text = (node.inputs && node.inputs.text) ? node.inputs.text : '"Hello"';
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"output.txt"';
+                line = `write ${text} to ${path}`;
+
+            } else if (node.type === 'append') {
+                // append "text" to "path"
+                const text = (node.inputs && node.inputs.text) ? node.inputs.text : '"New line"';
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"log.txt"';
+                line = `append ${text} to ${path}`;
+
+            } else if (node.type === 'json_read') {
+                // json_read var from "path"
+                const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'jsonData';
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"data.json"';
+                line = `json_read ${v} from ${path}`;
+
+            } else if (node.type === 'json_write') {
+                // json_write var to "path"
+                const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'jsonData';
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"output.json"';
+                line = `json_write ${v} to ${path}`;
+
+            } else if (node.type === 'json_get') {
+                // json_get value from var key "keyname"
+                const result = (node.inputs && node.inputs.result) ? node.inputs.result : 'value';
+                const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'jsonData';
+                const key = (node.inputs && node.inputs.key) ? node.inputs.key : '"name"';
+                line = `json_get ${result} from ${v} key ${key}`;
+
+            } else if (node.type === 'csv_read') {
+                // csv_read var from "path"
+                const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'csvData';
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"data.csv"';
+                line = `csv_read ${v} from ${path}`;
+
+            } else if (node.type === 'csv_write') {
+                // csv_write var to "path"
+                const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'csvData';
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"output.csv"';
+                line = `csv_write ${v} to ${path}`;
+
+            } else if (node.type === 'zip') {
+                // zip "zipfile" from "source"
+                const zipfile = (node.inputs && node.inputs.zipfile) ? node.inputs.zipfile : '"archive.zip"';
+                const source = (node.inputs && node.inputs.source) ? node.inputs.source : '"folder"';
+                line = `zip ${zipfile} from ${source}`;
+
+            } else if (node.type === 'unzip') {
+                // unzip "zipfile" to "dest"
+                const zipfile = (node.inputs && node.inputs.zipfile) ? node.inputs.zipfile : '"archive.zip"';
+                const dest = (node.inputs && node.inputs.dest) ? node.inputs.dest : '"extracted"';
+                line = `unzip ${zipfile} to ${dest}`;
+
             } else {
                 // Build argument list from inputs (default handler)
                 const args = [];
