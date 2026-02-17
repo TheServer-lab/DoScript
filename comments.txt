@@ -1,2 +1,2 @@
-[format: Name: Messeg]
+[format: Name: Message]
 Server-lab: You can leave comments here.
