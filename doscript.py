@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
-DoScript v0.6.6 - Fixed URL parsing bug
+DoScript v0.6.7 - Content-based file organization
 Changes:
-- Fixed comment parser to not break URLs with // inside quoted strings
+- if_file_contains "keyword" - organize files by their text content
+- if_file_not_contains "keyword" - inverse content check
+- read_content "file.txt" into var - read file content into variable
+- contains() function in expressions - check if string contains substring
+- Auto-injects {file_content} variable in for_each loops (text files)
 
-Previous version (0.6.5):
-- execute: Execute .exe files directly
+Previous version (0.6.6):
+- Fixed URL parsing bug
 
 Previous version (0.6.4):
 - replace_in_file: Find and replace text in files
@@ -61,7 +65,7 @@ except ImportError:
     HAS_PSUTIL = False
 
 # Current interpreter version
-VERSION = "0.6.6"
+VERSION = "0.6.7"
 
 # ----------------------------
 # Script Template
@@ -355,6 +359,13 @@ class DoScriptInterpreter:
                 return str(self.evaluate_expression(args[0])).startswith(str(self.evaluate_expression(args[1])))
             if fname == 'endswith' and len(args) == 2:
                 return str(self.evaluate_expression(args[0])).endswith(str(self.evaluate_expression(args[1])))
+            if fname == 'contains' and len(args) == 2:
+                return str(self.evaluate_expression(args[1])).lower() in str(self.evaluate_expression(args[0])).lower()
+            if fname == 'contains_case' and len(args) == 2:
+                # case-sensitive version
+                return str(self.evaluate_expression(args[1])) in str(self.evaluate_expression(args[0]))
+            if fname == 'notcontains' and len(args) == 2:
+                return str(self.evaluate_expression(args[1])).lower() not in str(self.evaluate_expression(args[0])).lower()
             if fname == 'split':
                 if len(args) == 1:
                     return str(self.evaluate_expression(args[0])).split()
@@ -1334,6 +1345,30 @@ class DoScriptInterpreter:
                     self.raise_error(ProcessError, f"Failed to open link '{link}': {e}")
             return None
 
+        # read_content - Read file content into a variable
+        # Usage: read_content "file.txt" into myvar
+        if stmt.startswith('read_content '):
+            m = re.match(r'read_content\s+(.+?)\s+into\s+(\w+)$', stmt)
+            if m:
+                path_expr, varname = m.groups()
+                filepath = self.extract_string(path_expr.strip())
+                resolved = self.resolve_path(filepath)
+                if self.dry_run:
+                    self.log_dry(f"read_content {resolved} into {varname}")
+                    self.set_variable(varname, "")
+                else:
+                    try:
+                        with open(resolved, 'r', encoding='utf-8', errors='ignore') as f:
+                            content = f.read()
+                        if varname not in self.declared_globals:
+                            self.declared_globals.add(varname)
+                            self.global_vars[varname] = None
+                        self.set_variable(varname, content)
+                        self.log_info(f"Read {len(content)} chars from {resolved}")
+                    except Exception as e:
+                        self.raise_error(FileError, f"read_content failed for '{filepath}': {e}")
+                return None
+
         # replace_in_file - Find and replace text in files
         if stmt.startswith('replace_in_file '):
             m = re.match(r'replace_in_file\s+"([^"]+)"\s+"([^"]+)"\s+"([^"]+)"$', stmt)
@@ -1910,14 +1945,25 @@ class DoScriptInterpreter:
                         if pattern == '*' or pattern == '**':
                             print("Warning: legacy glob used; prefer 'here' or 'deep'.", file=sys.stderr)
                         resolved = self.resolve_path(pattern)
-                        if '**' in pattern:
-                            matched_all = glob.glob(resolved, recursive=True)
+                        # If resolved is a directory, list its contents
+                        if os.path.isdir(resolved):
+                            try:
+                                entries = [os.path.join(resolved, e) for e in os.listdir(resolved)]
+                            except Exception:
+                                entries = []
+                            if handle_folders:
+                                matched_paths = [p for p in entries if os.path.isdir(p)]
+                            else:
+                                matched_paths = [p for p in entries if os.path.isfile(p)]
                         else:
-                            matched_all = glob.glob(resolved)
-                        if handle_folders:
-                            matched_paths = [p for p in matched_all if os.path.isdir(p)]
-                        else:
-                            matched_paths = [p for p in matched_all if os.path.isfile(p)]
+                            if '**' in pattern:
+                                matched_all = glob.glob(resolved, recursive=True)
+                            else:
+                                matched_all = glob.glob(resolved)
+                            if handle_folders:
+                                matched_paths = [p for p in matched_all if os.path.isdir(p)]
+                            else:
+                                matched_paths = [p for p in matched_all if os.path.isfile(p)]
                     # ensure declared
                     if var_name not in self.declared_globals:
                         self.declared_globals.add(var_name)
@@ -2007,6 +2053,29 @@ class DoScriptInterpreter:
                                     self.declared_globals.add(k)
                                     self.global_vars[k] = None
                                 self.global_vars[k] = v
+                            
+                            # inject file content for text files (for if_file_contains)
+                            content_key = var_name + '_content'
+                            if os.path.isfile(full_abs):
+                                text_exts = {'.txt', '.md', '.csv', '.log', '.json', '.xml',
+                                             '.html', '.htm', '.py', '.js', '.ts', '.css',
+                                             '.yaml', '.yml', '.ini', '.cfg', '.conf',
+                                             '.do', '.sh', '.bat', '.ps1', '.rst', '.toml'}
+                                _, ext = os.path.splitext(basename)
+                                if ext.lower() in text_exts:
+                                    try:
+                                        with open(full_abs, 'r', encoding='utf-8', errors='ignore') as f:
+                                            file_content = f.read()
+                                    except Exception:
+                                        file_content = ''
+                                else:
+                                    file_content = ''
+                            else:
+                                file_content = ''
+                            if content_key not in self.declared_globals:
+                                self.declared_globals.add(content_key)
+                                self.global_vars[content_key] = None
+                            self.global_vars[content_key] = file_content
 
                             # --- Execute body as a proper block (preserve if_ends_with sugar) ---
                             transformed: List[str] = []
@@ -2030,6 +2099,48 @@ class DoScriptInterpreter:
                                         q += 1
                                     if q >= len(body):
                                         self.raise_error(DoScriptError, "Missing end_if in if_ends_with block")
+                                    transformed.append(f'if {cond_expr}')
+                                    transformed.extend(inner_lines)
+                                    transformed.append('end_if')
+                                    p = q + 1
+                                elif stripped.startswith('if_file_contains '):
+                                    # if_file_contains "keyword" → checks file_content variable
+                                    keyword_tok = stripped[len('if_file_contains '):].strip()
+                                    keyword = self.extract_string(keyword_tok)
+                                    current_var = self.loop_var_stack[-1] if self.loop_var_stack else None
+                                    if current_var is None:
+                                        self.raise_error(DoScriptError, "if_file_contains used outside for_each")
+                                    cond_expr = f'contains({current_var}_content, \"{keyword}\")'
+                                    inner_lines = []
+                                    q = p + 1
+                                    while q < len(body):
+                                        if body[q].strip() == 'end_if':
+                                            break
+                                        inner_lines.append(body[q])
+                                        q += 1
+                                    if q >= len(body):
+                                        self.raise_error(DoScriptError, "Missing end_if in if_file_contains block")
+                                    transformed.append(f'if {cond_expr}')
+                                    transformed.extend(inner_lines)
+                                    transformed.append('end_if')
+                                    p = q + 1
+                                elif stripped.startswith('if_file_not_contains '):
+                                    # if_file_not_contains "keyword" → checks file does NOT contain keyword
+                                    keyword_tok = stripped[len('if_file_not_contains '):].strip()
+                                    keyword = self.extract_string(keyword_tok)
+                                    current_var = self.loop_var_stack[-1] if self.loop_var_stack else None
+                                    if current_var is None:
+                                        self.raise_error(DoScriptError, "if_file_not_contains used outside for_each")
+                                    cond_expr = f'notcontains({current_var}_content, "{keyword}")'
+                                    inner_lines = []
+                                    q = p + 1
+                                    while q < len(body):
+                                        if body[q].strip() == 'end_if':
+                                            break
+                                        inner_lines.append(body[q])
+                                        q += 1
+                                    if q >= len(body):
+                                        self.raise_error(DoScriptError, "Missing end_if in if_file_not_contains block")
                                     transformed.append(f'if {cond_expr}')
                                     transformed.extend(inner_lines)
                                     transformed.append('end_if')
