@@ -1,358 +1,207 @@
-# DoScript 🚀
+# DoScript — Automation for Humans
 
-**Stop writing Python boilerplate. Start automating.**
+**DoScript** is a small, safe, human-readable scripting language built for
+system automation. Think *Batch 2.0*: clean syntax, built-in safety, and
+powerful enough to write real installers, file sorters, and deployment tools
+— without ever needing to know Python or PowerShell.
 
-DoScript is a dead-simple scripting language for everyday file automation. If you can write plain English, you can automate your computer.
-
-```bash
-do organize-downloads.do
 ```
-
-That's it. No imports, no classes, no boilerplate.
+ask name "What's your project called?"
+make folder '{name}'
+download "https://example.com/starter.zip" to 'starters/{name}.zip'
+unzip 'starters/{name}.zip' to '{name}'
+say 'Done! Your project is ready in /{name}'
+```
 
 ---
 
 ## Why DoScript?
 
-**Before:** You write 30 lines of Python just to organize files by type.
-
-**After:** You write this:
-
-```python
-# organize-downloads.do
-for_each file_in here
-    if file_ext == ".pdf"
-        move file to "Documents/PDFs/{file_name}"
-    end_if
-    if file_ext == ".jpg" or file_ext == ".png"  
-        move file to "Pictures/{year}/{month}/{file_name}"
-    end_if
-end_for
-say "✓ Downloads organized!"
-```
-
-Run it: `do organize-downloads.do`
+| | Batch | PowerShell | DoScript |
+|---|---|---|---|
+| Beginner-friendly | ⚠️ | ❌ | ✅ |
+| Human-readable syntax | ❌ | ❌ | ✅ |
+| Built-in dry-run | ❌ | ❌ | ✅ |
+| Structured error handling | ❌ | ✅ | ✅ |
+| File metadata in loops | ❌ | ✅ | ✅ |
+| HTTP client built in | ❌ | ✅ | ✅ |
+| Distributable as .exe | ❌ | ⚠️ | ✅ |
 
 ---
 
-## Quick Start
+## Highlights
 
-### Windows (Recommended)
-
-1. **[Download the installer](https://github.com/TheServer-lab/DoScript/releases/latest)** (One-click setup)
-2. Open Command Prompt anywhere
-3. Create your first script:
-
-```bash
-echo say "Hello World!" > hello.do
-do hello.do
-```
-
-### From Source (All platforms)
-
-```bash
-git clone https://github.com/TheServer-lab/DoScript.git
-cd DoScript
-python doscript.py examples/hello_world.do
-```
-
-**Requirements:** Python 3.8+
+- **Human-readable DSL** — scripts read like plain English instructions
+- **`--dry-run` built in** — simulate destructive operations safely before running them
+- **Rich file loops** — iterate files with auto-injected metadata: name, size, extension, age, content, and more
+- **Structured error handling** — `try/catch NetworkError`, `FileError`, `ProcessError`, `DataError`
+- **Full HTTP client** — `download`, `http_get`, `http_post`, `upload`, `ping` out of the box
+- **Real functions** — parameters, return values, and local variable scoping
+- **Modular scripts** — `include` libraries, chain scripts with `do_new`
+- **Clear errors** — every error reports the file name, line number, and source line
+- **Distributable** — ships as `doscript.exe`, embeds easily in any toolchain
 
 ---
 
-## Real Examples That Actually Help
+## Install
 
-### 🗂️ Organize Downloads by Type
+### Prebuilt EXE (Windows)
+Download the latest installer from the [Releases](../../releases) page and run it.
 
-```python
-# organize-downloads.do
-for_each file_in here
-    if file_ext == ".pdf"
-        move file to "Documents/{file_name}"
-    end_if
-    if file_ext == ".jpg" or file_ext == ".png"
-        move file to "Pictures/{file_name}"
-    end_if
-    if file_ext == ".zip"
-        move file to "Archives/{file_name}"
-    end_if
-end_for
 ```
-
-### 🧹 Delete Old Files (30+ days)
-
-```python
-# clean-old-files.do
-for_each file_in deep
-    if file_is_old_days > 30
-        say "Deleting: {file_name} ({file_is_old_days} days old)"
-        delete file_path
-    end_if
-end_for
-```
-
-### 📸 Backup Photos by Date
-
-```python
-# backup-photos.do
-for_each file_in deep
-    if file_ext == ".jpg" or file_ext == ".png"
-        copy file to "D:\Backup\{year}\{month}\{file_name}"
-        say "Backed up: {file_name}"
-    end_if
-end_for
-```
-
-### 🔍 Find Large Files (50MB+)
-
-```python
-# find-large-files.do
-for_each file_in deep
-    if file_size_mb > 50
-        say "{file_name}: {file_size_mb}MB at {file_path}"
-    end_if
-end_for
-```
-
-### 🔄 Rename Files in Bulk
-
-```python
-# rename-screenshots.do
-global_variable = counter
-counter = 1
-
-for_each file_in here
-    if file_name starts_with "Screenshot"
-        move file to "screenshot_{counter}{file_ext}"
-        counter = counter + 1
-    end_if
-end_for
-```
-
-**[📁 See 20+ more examples →](/examples)**
-
----
-
-## Features That Make Life Easy
-
-### ✅ Built-in Safety
-
-```bash
-# Test before running for real
-do cleanup.do --dry-run
-
-# See what's happening
-do backup.do --verbose
-```
-
-### 📅 Time Variables (Built-in)
-
-```python
-say "Backup created on {today} at {now}"
-# Output: Backup created on 2024-02-08 at 14:30:45
-
-make folder "Backups/{year}/{month}/{day}"
-# Creates: Backups/2024/02/08
-```
-
-**Available:** `{time}`, `{today}`, `{now}`, `{year}`, `{month}`, `{day}`, `{hour}`, `{minute}`, `{second}`
-
-### 📊 Rich File Metadata
-
-Inside `for_each` loops, you get instant access to:
-
-```python
-for_each file_in deep
-    say "{file_name}"           # filename.txt
-    say "{file_path}"           # C:\full\path\filename.txt  
-    say "{file_ext}"            # .txt
-    say "{file_size_mb}"        # 2.5
-    say "{file_is_old_days}"    # 45
-    say "{file_modified}"       # Unix timestamp
-end_for
-```
-
-**[📖 See all metadata →](/docs/file-metadata.md)**
-
-### 🌐 Cross-Platform
-
-Write once, run anywhere:
-- ✅ Windows (tested on 10/11)
-- ✅ macOS (10.15+)
-- ✅ Linux (Ubuntu, Debian, Arch, etc.)
-
-### 🔧 Modern Features
-
-- **JSON/CSV support:** `json_read`, `csv_read`, `json_get`, `csv_get`
-- **Archive handling:** `zip`, `unzip`, `zip_list`
-- **Network operations:** `download`, `upload`, `ping`
-- **Process control:** `run`, `capture`, `kill`
-- **Error handling:** `try`/`catch` blocks
-- **Functions & macros:** Reusable code blocks
-
----
-
-## Documentation
-
-| Doc | Description |
-|-----|-------------|
-| **[Quick Start Guide](/docs/quickstart.md)** | Get running in 5 minutes |
-| **[Language Reference](/docs/reference.md)** | Complete command list |
-| **[Examples Library](/examples)** | 20+ ready-to-use scripts |
-| **[FAQ](/docs/faq.md)** | Common questions |
-
----
-
-## Why Not Just Use...?
-
-### vs. Bash/Shell Scripts
-- ✅ Readable by non-programmers
-- ✅ Cross-platform (same script on Windows/Mac/Linux)
-- ✅ File operations are first-class citizens
-
-### vs. Python
-- ✅ No boilerplate (`import os, shutil, glob...`)
-- ✅ Built for automation, not general programming
-- ✅ Instant file metadata without `os.stat()`
-
-### vs. Batch Files
-- ✅ Modern syntax
-- ✅ Works on all platforms
-- ✅ Rich error handling
-
-### vs. PowerShell
-- ✅ Simpler syntax
-- ✅ Faster to learn (5 min vs 5 hours)
-- ✅ No object pipeline confusion
-
-**DoScript is:** "When Bash is too cryptic and Python is overkill"
-
----
-
-## Use Cases
-
-**Perfect for:**
-- 📁 File organization & cleanup
-- 💾 Backup automation
-- 📦 Software deployment/installation
-- 🧹 Scheduled maintenance tasks
-- 📊 Log file processing
-- 🔄 Batch renaming & conversions
-
-**Not for:**
-- Web servers or APIs
-- Complex data processing
-- Real-time applications
-- GPU-accelerated computing
-
----
-
-## Installation Methods
-
-### Option 1: Prebuilt Installer (Windows)
-
-**[Download Latest Release →](https://github.com/TheServer-lab/DoScript/releases/latest)**
-
-One-click installer that:
-- ✅ Adds `do` command to PATH
-- ✅ Sets up file associations (`.do` files)
-- ✅ Installs syntax highlighting (optional)
-
-### Option 2: Manual Install
-
-```bash
-# Clone the repo
-git clone https://github.com/TheServer-lab/DoScript.git
-cd DoScript
-
-# Run directly
-python doscript.py your-script.do
-
-# Or make it globally available
-# Windows (PowerShell as Admin):
-$env:PATH += ";$(pwd)"
-
-# Linux/Mac:
-sudo ln -s $(pwd)/doscript.py /usr/local/bin/do
-chmod +x /usr/local/bin/do
-```
-
----
-
-## Command-Line Usage
-
-```bash
-# Basic usage
 do script.do
+```
 
-# With arguments (accessible as arg1, arg2, etc.)
-do deploy.do production us-east-1
+### From Source
+Requires **Python 3.8+**:
 
-# Dry run (simulate without making changes)
-do cleanup.do --dry-run
-
-# Verbose output
-do backup.do --verbose
-
-# Combine flags
-do deploy.do --dry-run --verbose staging
+```
+python doscript.py myscript.do
 ```
 
 ---
 
-## What's New in v0.6.1
+## Usage
 
-- ✨ **Time variables:** `{today}`, `{now}`, `{year}`, etc.
-- 📊 **JSON/CSV support:** Read, write, and parse data files
-- 📦 **ZIP operations:** Create and extract archives
-- 🌐 **Open links:** `open_link` command
-- 🔄 **Auto-update checker:** Stay current automatically
-- 🪟 **Windows shutdown:** System power control
+```
+do <script.do> [--dry-run] [--verbose] [args...]
+```
 
-**[📋 Full Changelog →](/CHANGELOG.md)**
-
----
-
-## Community & Support
-
-- **[💬 Join Discord](https://discord.gg/your-link)** - Get help, share scripts
-- **[🐛 Report Issues](https://github.com/TheServer-lab/DoScript/issues)** - Found a bug?
-- **[💡 Request Features](https://github.com/TheServer-lab/DoScript/discussions)** - Have an idea?
-- **[📖 Read the Blog](https://your-blog.com)** - Tutorials & tips
+| Flag | What it does |
+|---|---|
+| `--dry-run` | Simulates all destructive operations — nothing is written, moved, or deleted |
+| `--verbose` | Prints extra execution detail |
+| `arg1`…`arg32` | CLI arguments available inside the script |
 
 ---
 
-## Contributing
+## The Language at a Glance
 
-We'd love your help! Check out:
-- **[Good First Issues](https://github.com/TheServer-lab/DoScript/labels/good%20first%20issue)** - Easy starting points
-- **[Contributing Guide](/CONTRIBUTING.md)** - How to contribute
-- **[Share Your Scripts](/examples/community)** - Show off what you've built!
+### Variables & Output
+```
+global_variable = name, age
+
+name = "Alice"
+age  = 30
+
+say 'Hello, {name}! You are {age} years old.'
+ask answer "Continue? (y/n)"
+```
+
+> Use **single quotes** for strings with `{variables}`. Double quotes are always literal.
+
+### Control Flow
+```
+if age >= 18 and age < 65
+    say "Working age."
+end_if
+
+loop 3
+    say "Retrying..."
+    wait 1
+end_loop
+```
+
+### File Operations
+```
+make folder "output"
+copy "report.pdf" to "backup/report.pdf"
+zip "output" to 'output_{today}.zip'
+
+for_each file_in here
+    if_ends_with ".log"
+        if file_is_old_days > 30
+            delete file_path
+        end_if
+    end_if
+end_for
+```
+
+### Networking
+```
+try
+    download "https://example.com/app.zip" to "app.zip"
+    say "Download complete!"
+catch NetworkError
+    say "Check your connection and try again."
+    exit 1
+end_try
+```
+
+### Functions
+```
+function greet name
+    say 'Hello, {name}!'
+end_function
+
+greet("World")
+```
+
+---
+
+## A Real Example — Installer Script
+
+```
+say "==========================="
+say "    MyApp Installer v1.0"
+say "==========================="
+
+global_variable = confirm
+
+ask confirm "Install MyApp? (y/n)"
+
+if confirm == "y"
+    make folder "C:/MyApp"
+
+    try
+        download "https://example.com/myapp.zip" to "C:/MyApp/myapp.zip"
+    catch NetworkError
+        say "Download failed. Visit: https://example.com/myapp"
+        exit 1
+    end_try
+
+    unzip "C:/MyApp/myapp.zip" to "C:/MyApp"
+    path add "C:/MyApp/bin"
+    delete "C:/MyApp/myapp.zip"
+
+    say "Done! Run 'myapp' from any terminal."
+else
+    say "Installation cancelled."
+end_if
+
+pause
+```
+
+---
+
+## Safety Model
+
+DoScript is designed so that mistakes are hard to make and easy to catch.
+
+- **`--dry-run`** replaces every destructive operation with a `[DRY]` log message — nothing is touched
+- **Explicit destructive commands** (`delete`, `move`) are clearly named so intent is visible
+- **`try/catch`** with typed errors means network and file failures never silently crash a script
+- **Structured logging** with `log`, `warn`, and `error` makes unattended scripts easy to monitor
+
+---
+
+## Learn DoScript
+
+The [`/learn`](learn/) folder contains eight step-by-step lessons:
+
+| Lesson | Topic |
+|---|---|
+| [01 — Basics](learn/01-basics.md) | Variables, `say`, `ask`, comments, quote rules |
+| [02 — Control Flow](learn/02-control-flow.md) | `if/else`, `loop`, `repeat`, `break`, `try/catch` |
+| [03 — Files](learn/03-files.md) | `make`, `copy`, `move`, `delete`, `zip`, `read_content` |
+| [04 — for_each](learn/04-for-each.md) | File iteration, metadata variables, `if_ends_with` |
+| [05 — Functions](learn/05-functions.md) | Functions, macros, `include` |
+| [06 — Network](learn/06-network.md) | `download`, `http_get/post`, `ping`, `upload` |
+| [07 — Installers](learn/07-installers.md) | Writing real installer scripts end-to-end |
+| [08 — Tips & Patterns](learn/08-tips-and-patterns.md) | Community patterns, common gotchas |
 
 ---
 
 ## License
 
-[Server-Lab Open-Control License (SOCL) 1.0](/LICENSE)
-
----
-
-## Star History
-
-⭐ **Star this repo if DoScript saved you time!**
-
-It helps others discover the project and motivates continued development.
-
----
-
-## Made By
-
-**[TheServer-lab](https://github.com/TheServer-lab)** - Building tools that make computing simpler.
-
-**DoScript:** Because automation shouldn't require a CS degree.
-
----
-
-<p align="center">
-  <sub>Built with ❤️ for people who just want to organize their files</sub>
-</p>
+[Server-Lab Open-Control License (SOCL) 1.0](LICENSE)
