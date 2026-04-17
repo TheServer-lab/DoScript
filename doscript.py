@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """
-DoScript v0.6.10 - New features and bug fixes
+DoScript v0.6.11 - Merge of parallel v0.6.10 branches
+Changes:
+- New: json_read and json_write now accept variable paths and single-quoted interpolated strings
+- New: json_set <dictVar> "key" <valueExpr> — write a value into a JSON object variable (supports dot notation)
+- New: system_disk now accepts variable paths and expressions (not just hardcoded double-quoted strings)
+- New: bare function calls work as standalone statements without capturing return value (e.g. greet("Alice"))
+
+Previous version (0.6.10) - New features and bug fixes
 Changes:
 - Bug fix: replaced deprecated unicode_escape codec with manual escape handling (non-ASCII chars now work)
 - Bug fix: double-quoted strings containing {var} patterns now emit a hint pointing to single quotes
@@ -98,7 +105,7 @@ except ImportError:
     HAS_PSUTIL = False
 
 # Current interpreter version
-VERSION = "0.6.10"
+VERSION = "0.6.11"
 
 # ----------------------------
 # Script Template
@@ -877,9 +884,12 @@ class DoScriptInterpreter:
 
         # JSON operations
         if stmt.startswith('json_read '):
-            m = re.match(r'json_read\s+"([^"]+)"\s+to\s+(\w+)$', stmt)
+            m = re.match(r'json_read\s+(.+)\s+to\s+(\w+)$', stmt)
             if m:
-                filepath, varname = m.groups()
+                path_expr = m.group(1).strip()
+                varname = m.group(2).strip()
+                filepath = self.extract_string(path_expr) if path_expr.startswith(('"', "'")) else str(self.evaluate_expression(path_expr))
+                filepath = self.interpolate_if_needed(filepath)
                 resolved = self.resolve_path(filepath)
                 try:
                     with open(resolved, 'r', encoding='utf-8') as f:
@@ -895,9 +905,12 @@ class DoScriptInterpreter:
                 return None
 
         if stmt.startswith('json_write '):
-            m = re.match(r'json_write\s+(\w+)\s+to\s+"([^"]+)"$', stmt)
+            m = re.match(r'json_write\s+(\w+)\s+to\s+(.+)$', stmt)
             if m:
-                varname, filepath = m.groups()
+                varname = m.group(1).strip()
+                path_expr = m.group(2).strip()
+                filepath = self.extract_string(path_expr) if path_expr.startswith(('"', "'")) else str(self.evaluate_expression(path_expr))
+                filepath = self.interpolate_if_needed(filepath)
                 resolved = self.resolve_path(filepath)
                 data = self.get_variable(varname)
                 if self.dry_run:
@@ -936,6 +949,26 @@ class DoScriptInterpreter:
                 except (KeyError, IndexError, ValueError) as e:
                     self.raise_error(DataError, f"Key '{key}' not found in {source_var}: {e}")
                 return None
+
+        if stmt.startswith('json_set '):
+            # json_set <dictVar> "key" <valueExpr>  — supports dot notation for nested keys
+            m = re.match(r'json_set\s+(\w+)\s+"([^"]+)"\s+(.+)$', stmt)
+            if m:
+                dict_var, key, val_expr = m.groups()
+                data = self.get_variable(dict_var)
+                if not isinstance(data, dict):
+                    self.raise_error(DataError, f"json_set: '{dict_var}' is not a JSON object")
+                value = self.evaluate_expression(val_expr.strip())
+                keys = key.split('.')
+                target = data
+                for k in keys[:-1]:
+                    if k not in target:
+                        target[k] = {}
+                    target = target[k]
+                target[keys[-1]] = value
+                self.set_variable(dict_var, data)
+                self.log_verbose(f"json_set: {dict_var}.{key} = {value}")
+            return None
 
         # CSV operations
         if stmt.startswith('csv_read '):
@@ -2002,9 +2035,12 @@ class DoScriptInterpreter:
 
         # system_disk - Get disk usage percentage for a path
         if stmt.startswith('system_disk '):
-            m = re.match(r'system_disk\s+"([^"]+)"\s+to\s+(\w+)$', stmt)
+            m = re.match(r'system_disk\s+(.+)\s+to\s+(\w+)$', stmt)
             if m:
-                path, varname = m.groups()
+                path_expr = m.group(1).strip()
+                varname = m.group(2).strip()
+                path = self.extract_string(path_expr) if path_expr.startswith(("'", '"')) else str(self.evaluate_expression(path_expr))
+                path = self.interpolate_if_needed(path)
                 resolved = self.resolve_path(path)
                 
                 if not HAS_PSUTIL:
@@ -2109,6 +2145,17 @@ class DoScriptInterpreter:
                     val = self.evaluate_expression(rhs)
                     self.set_variable(var_name, val)
             return None
+
+        # bare function call: myFunc(arg1, arg2) — call without capturing return value
+        m_call = re.match(r'^(\w+)\((.*)\)$', stmt)
+        if m_call:
+            fname = m_call.group(1)
+            args_raw = m_call.group(2).strip()
+            if fname in self.functions:
+                args = [self.evaluate_expression(a.strip()) for a in self._split_args(args_raw)] if args_raw else []
+                self.call_function(fname, args)
+                return None
+            # Not a known function — fall through to error
 
         # nothing matched
         self.raise_error(DoScriptError, f"Unknown statement: {stmt}")
