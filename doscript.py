@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-DoScript v0.6.12
+DoScript v0.6.13
 Changes:
+- New: make shortcut "<name>" to "<target>" on desktop/startmenu/programs -- create OS shortcuts
+- New: registry set/get/delete/exists -- Windows registry read/write (HKCU/HKLM/HKCR/HKU/HKCC)
+- New: run_from_web <script.do> -- fetch and run a .do script from TheServer-lab/DoScriptPackage
+
 - New: install_package from <manager> "<pkg>" -- cross-platform package installer
 - New: use "<module.do>" -- module system; searches ./modules/ then ~/DoScript/modules/
 - New: subscript read  -- cfg["key"], cfg["a"]["b"], list[0] in expressions
@@ -112,7 +116,7 @@ except ImportError:
     HAS_PSUTIL = False
 
 # Current interpreter version
-VERSION = "0.6.12"
+VERSION = "0.6.13"
 
 # ----------------------------
 # Script Template
@@ -157,10 +161,10 @@ DoScriptInterpreter = _rt.DoScriptInterpreter
 DoScriptError       = _rt.DoScriptError
 
 def _banner():
-    print("====================================================================================")
+    print("=====================================")
     print(f" {_TITLE}")
-    print(f" Powered by DoScript Runtime v{_DS_VERSION} https://github.com/TheServer-lab/DoScript")
-    print("====================================================================================")
+    print(f" Powered by DoScript Runtime v{_DS_VERSION}")
+    print("=====================================")
     print("Type 'help' for runtime commands.\n")
 
 HELP_TEXT = """\
@@ -2312,6 +2316,269 @@ class DoScriptInterpreter:
                 val = self.evaluate_expression(stmt[6:].strip())
                 return ('return', val)
 
+        # ── make shortcut ─────────────────────────────────────────────────────
+        # Syntax:
+        #   make shortcut "<name>" to "<target>"
+        #   make shortcut "<name>" to "<target>" on desktop
+        #   make shortcut "<name>" to "<target>" on startmenu
+        #   make shortcut "<name>" to "<target>" on programs
+        if stmt.startswith('make shortcut '):
+            m = re.match(
+                r'make shortcut\s+(.+?)\s+to\s+(.+?)(?:\s+on\s+(desktop|startmenu|programs|start\s*menu))?$',
+                stmt, re.IGNORECASE
+            )
+            if not m:
+                self.raise_error(DoScriptError, 'make shortcut: invalid syntax. '
+                    'Use: make shortcut "<name>" to "<target>" [on desktop|startmenu|programs]')
+            name       = str(self.evaluate_expression(m.group(1).strip()))
+            target_raw = str(self.evaluate_expression(m.group(2).strip()))
+            placement  = (m.group(3) or 'desktop').lower().replace(' ', '')
+            target     = os.path.abspath(self.resolve_path(target_raw)) if not target_raw.startswith(('http://', 'https://')) else target_raw
+
+            if not name.endswith('.lnk') and sys.platform == 'win32':
+                name += '.lnk'
+
+            # Resolve destination folder
+            if placement in ('desktop',):
+                if sys.platform == 'win32':
+                    dest_dir = os.path.join(os.environ.get('USERPROFILE', os.path.expanduser('~')), 'Desktop')
+                elif sys.platform == 'darwin':
+                    dest_dir = os.path.join(os.path.expanduser('~'), 'Desktop')
+                else:
+                    dest_dir = os.path.join(os.path.expanduser('~'), 'Desktop')
+            elif placement in ('startmenu', 'programs'):
+                if sys.platform == 'win32':
+                    dest_dir = os.path.join(
+                        os.environ.get('APPDATA', ''),
+                        'Microsoft', 'Windows', 'Start Menu', 'Programs'
+                    )
+                elif sys.platform == 'darwin':
+                    dest_dir = '/Applications'
+                else:
+                    dest_dir = os.path.join(os.path.expanduser('~'), '.local', 'share', 'applications')
+            else:
+                self.raise_error(DoScriptError, f"make shortcut: unknown placement '{placement}'. Use desktop, startmenu, or programs.")
+
+            shortcut_path = os.path.join(dest_dir, name)
+
+            if self.dry_run:
+                self.log_dry(f"make shortcut {shortcut_path!r} -> {target!r}")
+                return None
+
+            try:
+                if sys.platform == 'win32':
+                    # Use Windows Script Host via PowerShell — no extra deps needed
+                    ps_script = (
+                        f'$ws = New-Object -ComObject WScript.Shell; '
+                        f'$s = $ws.CreateShortcut({shortcut_path!r}); '
+                        f'$s.TargetPath = {target!r}; '
+                        f'$s.Save()'
+                    )
+                    subprocess.run(
+                        ['powershell', '-NoProfile', '-NonInteractive', '-Command', ps_script],
+                        check=True, capture_output=True
+                    )
+                elif sys.platform == 'darwin':
+                    # macOS: create an .app alias via AppleScript
+                    app_name = name.replace('.lnk', '.app')
+                    shortcut_path = os.path.join(dest_dir, app_name)
+                    apple_script = (
+                        f'tell application "Finder" to make alias file '
+                        f'to POSIX file "{target}" at POSIX file "{dest_dir}"'
+                    )
+                    subprocess.run(['osascript', '-e', apple_script], check=True, capture_output=True)
+                else:
+                    # Linux: create a .desktop file
+                    shortcut_path = shortcut_path.replace('.lnk', '.desktop')
+                    display_name = os.path.splitext(name)[0]
+                    desktop_content = (
+                        f'[Desktop Entry]\nType=Application\nName={display_name}\n'
+                        f'Exec={target}\nIcon={target}\nTerminal=false\n'
+                    )
+                    os.makedirs(dest_dir, exist_ok=True)
+                    with open(shortcut_path, 'w') as fh:
+                        fh.write(desktop_content)
+                    os.chmod(shortcut_path, 0o755)
+                self.log_info(f"Created shortcut: {shortcut_path}")
+            except subprocess.CalledProcessError as e:
+                self.raise_error(DoScriptError, f"make shortcut failed: {e.stderr.decode(errors='replace').strip() if e.stderr else e}")
+            except Exception as e:
+                self.raise_error(DoScriptError, f"make shortcut failed: {e}")
+            return None
+
+        # ── registry set / get / delete / exists ──────────────────────────────
+        # Syntax:
+        #   registry set   HKCU\Software\MyApp\Key ValueName "data"
+        #   registry set   HKCU\Software\MyApp\Key ValueName 42
+        #   registry get   HKCU\Software\MyApp\Key ValueName to myvar
+        #   registry delete HKCU\Software\MyApp\Key [ValueName]
+        #   registry exists HKCU\Software\MyApp\Key [ValueName] to myvar
+        if stmt.startswith('registry '):
+            if sys.platform != 'win32':
+                self.raise_error(DoScriptError, "registry commands are only supported on Windows")
+            try:
+                import winreg
+            except ImportError:
+                self.raise_error(DoScriptError, "winreg module not available")
+
+            HIVE_MAP = {
+                'HKCU': winreg.HKEY_CURRENT_USER,
+                'HKLM': winreg.HKEY_LOCAL_MACHINE,
+                'HKCR': winreg.HKEY_CLASSES_ROOT,
+                'HKU':  winreg.HKEY_USERS,
+                'HKCC': winreg.HKEY_CURRENT_CONFIG,
+            }
+
+            def _parse_regpath(path_str):
+                """Split 'HKCU\\Software\\MyApp' into (hive_handle, 'Software\\MyApp')."""
+                parts = path_str.replace('/', '\\').split('\\', 1)
+                hive_name = parts[0].upper()
+                if hive_name not in HIVE_MAP:
+                    self.raise_error(DoScriptError, f"registry: unknown hive '{hive_name}'. Use HKCU, HKLM, HKCR, HKU, or HKCC.")
+                return HIVE_MAP[hive_name], parts[1] if len(parts) > 1 else ''
+
+            rest = stmt[9:].strip()  # strip 'registry '
+
+            # registry set HKCU\Path\Key ValueName <expr>
+            m_set = re.match(r'^set\s+(\S+)\s+(\S+)\s+(.+)$', rest)
+            if m_set:
+                reg_path, value_name, val_expr = m_set.groups()
+                hive, subkey = _parse_regpath(reg_path)
+                value = self.evaluate_expression(val_expr.strip())
+                if self.dry_run:
+                    self.log_dry(f"registry set {reg_path}\\{value_name} = {value!r}")
+                    return None
+                try:
+                    reg_type = winreg.REG_DWORD if isinstance(value, int) else winreg.REG_SZ
+                    with winreg.CreateKeyEx(hive, subkey, access=winreg.KEY_SET_VALUE) as key:
+                        winreg.SetValueEx(key, value_name, 0, reg_type, value)
+                    self.log_info(f"Registry set {reg_path}\\{value_name} = {value!r}")
+                except Exception as e:
+                    self.raise_error(DoScriptError, f"registry set failed: {e}")
+                return None
+
+            # registry get HKCU\Path\Key ValueName to myvar
+            m_get = re.match(r'^get\s+(\S+)\s+(\S+)\s+to\s+(\w+)$', rest)
+            if m_get:
+                reg_path, value_name, dest_var = m_get.groups()
+                hive, subkey = _parse_regpath(reg_path)
+                try:
+                    with winreg.OpenKey(hive, subkey, access=winreg.KEY_READ) as key:
+                        data, _ = winreg.QueryValueEx(key, value_name)
+                    if dest_var not in self.declared_globals:
+                        self.declared_globals.add(dest_var)
+                        self.global_vars[dest_var] = None
+                    self.set_variable(dest_var, data)
+                    self.log_verbose(f"Registry get {reg_path}\\{value_name} = {data!r}")
+                except FileNotFoundError:
+                    self.raise_error(DoScriptError, f"registry get: key or value not found: {reg_path}\\{value_name}")
+                except Exception as e:
+                    self.raise_error(DoScriptError, f"registry get failed: {e}")
+                return None
+
+            # registry delete HKCU\Path\Key [ValueName]
+            m_del = re.match(r'^delete\s+(\S+)(?:\s+(\S+))?$', rest)
+            if m_del:
+                reg_path, value_name = m_del.group(1), m_del.group(2)
+                hive, subkey = _parse_regpath(reg_path)
+                if self.dry_run:
+                    if value_name:
+                        self.log_dry(f"registry delete value {reg_path}\\{value_name}")
+                    else:
+                        self.log_dry(f"registry delete key {reg_path}")
+                    return None
+                try:
+                    if value_name:
+                        with winreg.OpenKey(hive, subkey, access=winreg.KEY_SET_VALUE) as key:
+                            winreg.DeleteValue(key, value_name)
+                        self.log_info(f"Registry deleted value {reg_path}\\{value_name}")
+                    else:
+                        winreg.DeleteKey(hive, subkey)
+                        self.log_info(f"Registry deleted key {reg_path}")
+                except FileNotFoundError:
+                    self.raise_error(DoScriptError, f"registry delete: not found: {reg_path}")
+                except Exception as e:
+                    self.raise_error(DoScriptError, f"registry delete failed: {e}")
+                return None
+
+            # registry exists HKCU\Path\Key [ValueName] to myvar
+            m_ex = re.match(r'^exists\s+(\S+)(?:\s+(\S+))?\s+to\s+(\w+)$', rest)
+            if m_ex:
+                reg_path, value_name, dest_var = m_ex.group(1), m_ex.group(2), m_ex.group(3)
+                hive, subkey = _parse_regpath(reg_path)
+                exists = False
+                try:
+                    with winreg.OpenKey(hive, subkey, access=winreg.KEY_READ) as key:
+                        if value_name:
+                            winreg.QueryValueEx(key, value_name)
+                        exists = True
+                except FileNotFoundError:
+                    exists = False
+                if dest_var not in self.declared_globals:
+                    self.declared_globals.add(dest_var)
+                    self.global_vars[dest_var] = None
+                self.set_variable(dest_var, exists)
+                return None
+
+            self.raise_error(DoScriptError,
+                "registry: unknown subcommand. Use set, get, delete, or exists.")
+
+        # ── run_from_web <script.do> ─────────────────────────────────────────
+        # Fetches a .do script from TheServer-lab/DoScriptPackage and runs it.
+        # The script name is resolved against the repo's raw content base URL.
+        # Syntax:
+        #   run_from_web script.do
+        #   run_from_web "folder/script.do"
+        #   run_from_web '{some_var}.do'
+        if stmt.startswith('run_from_web '):
+            raw_arg = stmt[13:].strip()
+            # Use extract_string so bare names, double-quoted, and single-quoted all work
+            script_name = self.extract_string(raw_arg)
+            # Ensure .do extension
+            if not script_name.endswith('.do'):
+                script_name += '.do'
+            base_url = "https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main"
+            script_url = f"{base_url}/{script_name}"
+            if self.dry_run:
+                self.log_dry(f"run_from_web: would fetch and run {script_url}")
+                return None
+            self.log_info(f"Fetching {script_url} ...")
+            import tempfile as _tempfile
+            tmp_dir = _tempfile.mkdtemp(prefix="doscript_web_")
+            local_path = os.path.join(tmp_dir, os.path.basename(script_name))
+            try:
+                req = urllib.request.Request(
+                    script_url, headers={'User-Agent': f'DoScript/{VERSION}'}
+                )
+                try:
+                    with urllib.request.urlopen(req, timeout=30) as resp,                          open(local_path, 'wb') as out:
+                        out.write(resp.read())
+                except urllib.error.HTTPError as e:
+                    if e.code in (403, 404):
+                        self.raise_error(
+                            NetworkError,
+                            f"run_from_web: script '{script_name}' not found in DoScriptPackage "
+                            f"(HTTP {e.code}). Check: https://github.com/TheServer-lab/DoScriptPackage"
+                        )
+                    else:
+                        self.raise_error(NetworkError,
+                            f"run_from_web: HTTP {e.code} fetching '{script_url}'")
+                except urllib.error.URLError as e:
+                    self.raise_error(NetworkError,
+                        f"run_from_web: network error fetching '{script_url}': {e.reason}")
+                self.log_info(f"Running {script_name} ...")
+                # Run in a child interpreter that inherits the current variable scope
+                child = DoScriptInterpreter(dry_run=self.dry_run, verbose=self.verbose)
+                child.global_vars.update(self.global_vars)
+                child.declared_globals.update(self.declared_globals)
+                child.functions.update(self.functions)
+                child.run(local_path)
+                # Propagate any variable changes back to the parent
+                self.global_vars.update(child.global_vars)
+            finally:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            return None
+
         # ── install_package from <manager> "<package>" ──────────────────────────
         if stmt.startswith('install_package from '):
             m = re.match(r'install_package\s+from\s+(\w[\w-]*)\s+(.+)$', stmt)
@@ -3102,6 +3369,7 @@ class DoScriptInterpreter:
             if self.script_path_stack and self.script_path_stack[-1] == script_dir:
                 self.script_path_stack.pop()
 
+
 # ------------------------------------------------------------------------------
 # do build — compile a .do script to a standalone EXE
 # ------------------------------------------------------------------------------
@@ -3258,7 +3526,6 @@ def _do_build(argv):
             "--workpath", os.path.join(build_tmp, "work"),
             "--specpath", build_tmp,
             "--noconfirm",
-            "--hidden-import", "uuid",
             "--clean"
         ]
 
@@ -3317,6 +3584,7 @@ def main():
     if argv and argv[0] == 'build':
         _do_build(argv[1:])
         return
+
 
     dry = False
     verbose = False
