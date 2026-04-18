@@ -1,5 +1,38 @@
 # DoScript — Changelog
 
+## v0.6.13
+
+### New Features
+
+**`make shortcut` — OS shortcuts**
+Create desktop or Start Menu shortcuts to any file, folder, or URL.
+```
+make shortcut "My App" to "C:/Program Files/MyApp/app.exe" on desktop
+make shortcut "My App" to "C:/Program Files/MyApp/app.exe" on startmenu
+```
+Works on Windows (`.lnk` via PowerShell), macOS (Finder alias), Linux (`.desktop`). No extra dependencies.
+
+**`registry` — Windows registry access**
+Read, write, delete, and check the existence of registry keys and values.
+```
+registry set HKCU\Software\MyApp Theme "Dark"
+registry get HKCU\Software\MyApp Theme to theme
+registry exists HKCU\Software\MyApp to installed
+registry delete HKCU\Software\MyApp Theme
+```
+Supported hives: `HKCU`, `HKLM`, `HKCR`, `HKU`, `HKCC`. Raises a clear error on non-Windows. Respects `--dry-run`.
+
+**`run_from_web` — run a script from DoScriptPackage**
+Fetch and run any `.do` script from [TheServer-lab/DoScriptPackage](https://github.com/TheServer-lab/DoScriptPackage) in one line, from inside a script:
+```
+run_from_web cleaner.do
+run_from_web git-setup.do
+run_from_web tools/setup-python.do
+```
+Supports bare names (`.do` auto-appended), single-quoted interpolation, subfolder paths, and `--dry-run`.
+
+---
+
 ## v0.6.12
 
 ### New Features
@@ -39,6 +72,8 @@ python doscript.py build installer.do
 python doscript.py build installer.do --onefile --windowed --icon app.ico --title "My App"
 ```
 Built EXEs include the **DoScript Runtime Console**: a branded recovery shell that activates on crash, shows runtime metadata on `doscript`, and opens the official repo on `link`.
+The launcher template is embedded inside `doscript.py` — no separate template file required.
+`do build` works correctly when DoScript itself is distributed as a compiled `do.exe` (frozen exe detection via `sys.frozen`).
 
 ---
 
