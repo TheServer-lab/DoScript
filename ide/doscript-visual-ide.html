@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>DoScript Visual IDE - Complete v0.6.9</title>
+    <title>DoScript Visual IDE - Complete v0.6.13</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -102,7 +102,7 @@
 <body>
     <div id="app">
         <div id="sidebar">
-            <div id="sidebar-header"><h2>Command Library v0.6.9</h2></div>
+            <div id="sidebar-header"><h2>Command Library v0.6.13</h2></div>
             <div id="search-box"><input id="search-input" placeholder="Search commands..." /></div>
             <div id="commands-list"></div>
         </div>
@@ -141,7 +141,7 @@
     <div id="tooltip">Click to delete</div>
 
     <script>
-        // --- Full command list with ALL features from doscript.py v0.6.5
+        // --- Full command list with current features from doscript.py v0.6.13
         const COMMANDS = {
             'Output & Input': [
                 { name: 'say', desc: 'Print a message', inputs: ['message'], outputs: ['exec'], color: '#8b5cf6', defaultValues: {message: '"Hello"'} },
@@ -165,11 +165,14 @@
                 { name: 'else_if', desc: 'Else if condition', inputs: ['condition'], outputs: ['exec'], color: '#f97316', defaultValues: {condition: 'x < 0'} },
                 { name: 'else', desc: 'Else block', inputs: [], outputs: ['exec'], color: '#f97316' },
                 { name: 'end_if', desc: 'End if block', inputs: [], outputs: ['exec'], color: '#f97316' },
+                { name: 'try', desc: 'Start try block', inputs: [], outputs: ['exec'], color: '#f97316' },
+                { name: 'catch', desc: 'Catch specific or any error', inputs: ['error_type'], outputs: ['exec'], color: '#fb7185', defaultValues: {error_type: 'NetworkError'} },
+                { name: 'end_try', desc: 'End try/catch block', inputs: [], outputs: ['exec'], color: '#f97316' },
                 { name: 'goto', desc: 'Jump to label', inputs: ['label'], outputs: ['exec'], color: '#f97316', defaultValues: {label: 'myLabel'} },
                 { name: 'label', desc: 'Create label', inputs: ['name'], outputs: ['exec'], color: '#64748b', defaultValues: {name: 'myLabel'} },
             ],
             'Loops': [
-                { name: 'for_each', desc: 'Loop through list/files', inputs: ['var', 'items'], outputs: ['exec'], color: '#06b6d4', defaultValues: {var: 'item', items: 'myList'} },
+                { name: 'for_each', desc: 'Loop through list/files', inputs: ['var', 'items', 'age_filter'], outputs: ['exec'], color: '#06b6d4', defaultValues: {var: 'item', items: 'myList', age_filter: ''} },
                 { name: 'for_each_line', desc: 'Loop through file lines', inputs: ['var', 'file'], outputs: ['exec'], color: '#06b6d4', defaultValues: {var: 'line', file: '"data.txt"'} },
                 { name: 'end_for', desc: 'End for_each', inputs: [], outputs: ['exec'], color: '#06b6d4' },
                 { name: 'while', desc: 'While loop', inputs: ['condition'], outputs: ['exec'], color: '#06b6d4', defaultValues: {condition: 'x < 10'} },
@@ -185,6 +188,10 @@
                 { name: 'end_function', desc: 'End function', inputs: [], outputs: ['exec'], color: '#7c3aed' },
                 { name: 'call', desc: 'Call function', inputs: ['name', 'args'], outputs: ['exec'], color: '#7c3aed', defaultValues: {name: 'myFunction', args: ''} },
                 { name: 'return', desc: 'Return from function', inputs: ['value'], outputs: ['exec'], color: '#7c3aed', defaultValues: {value: ''} }
+            ],
+            'Macros': [
+                { name: 'make a_command', desc: 'Define a macro command', inputs: ['name'], outputs: ['exec'], color: '#a855f7', defaultValues: {name: 'print_separator'} },
+                { name: 'end_command', desc: 'End macro command', inputs: [], outputs: ['exec'], color: '#a855f7' }
             ],
             'File System': [
                 { name: 'make file', desc: 'Create file', inputs: ['path', 'content'], outputs: ['exec'], color: '#16a34a', defaultValues: {path: '"output.txt"', content: '"Hello"'} },
@@ -210,7 +217,8 @@
             'JSON Operations': [
                 { name: 'json_read', desc: 'Read JSON file', inputs: ['path', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {path: '"data.json"', var: 'jsonData'} },
                 { name: 'json_write', desc: 'Write JSON to file', inputs: ['path', 'var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {path: '"output.json"', var: 'jsonData'} },
-                { name: 'json_get', desc: 'Get JSON key value', inputs: ['var', 'key', 'result'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {var: 'jsonData', key: '"name"', result: 'value'} }
+                { name: 'json_get', desc: 'Get JSON key value', inputs: ['var', 'key', 'result'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {var: 'jsonData', key: '"name"', result: 'value'} },
+                { name: 'json_set', desc: 'Set JSON key value', inputs: ['var', 'key', 'value'], outputs: ['exec'], color: '#0284c7', defaultValues: {var: 'jsonData', key: '"user.name"', value: '"Alice"'} }
             ],
             'CSV Operations': [
                 { name: 'csv_read', desc: 'Read CSV file', inputs: ['path', 'var'], outputs: ['exec'], color: '#10b981', defaultValues: {path: '"data.csv"', var: 'csvData'} },
@@ -234,8 +242,27 @@
                 { name: 'shutdown', desc: 'Shutdown Windows', inputs: ['delay'], outputs: ['exec'], color: '#ef4444', defaultValues: {delay: '60'} },
                 { name: 'open', desc: 'Open file/folder', inputs: ['path'], outputs: ['exec'], color: '#10b981', defaultValues: {path: '"."'} },
                 { name: 'open_link', desc: 'Open URL in browser', inputs: ['url'], outputs: ['exec'], color: '#10b981', defaultValues: {url: '"https://example.com"'} },
-                { name: 'do_new', desc: 'Execute new DoScript', inputs: ['script', 'args'], outputs: ['exec'], color: '#7c3aed', defaultValues: {script: '"script.do"', args: ''} },
-                { name: 'include', desc: 'Include another script', inputs: ['path'], outputs: ['exec'], color: '#7c3aed', defaultValues: {path: '"library.do"'} }
+                { name: 'do_new', desc: 'Execute new DoScript', inputs: ['script', 'args'], outputs: ['exec'], color: '#7c3aed', defaultValues: {script: '"script.do"', args: ''} }
+            ],
+            'Modules & Web': [
+                { name: 'include', desc: 'Include another script', inputs: ['path'], outputs: ['exec'], color: '#7c3aed', defaultValues: {path: '"library.do"'} },
+                { name: 'use', desc: 'Load a module from modules paths', inputs: ['path'], outputs: ['exec'], color: '#7c3aed', defaultValues: {path: '"files.do"'} },
+                { name: 'run_from_web', desc: 'Run a script from DoScriptPackage', inputs: ['path'], outputs: ['exec'], color: '#8b5cf6', defaultValues: {path: '"cleaner.do"'} }
+            ],
+            'Environment & Safety': [
+                { name: 'set_env', desc: 'Set environment variable', inputs: ['name', 'value'], outputs: ['exec'], color: '#14b8a6', defaultValues: {name: '"MY_APP_HOME"', value: '"C:/MyApp"'} },
+                { name: 'require_admin', desc: 'Require administrator/root access', inputs: ['message'], outputs: ['exec'], color: '#ef4444', defaultValues: {message: '"Please run as Administrator."'} },
+                { name: 'confirm', desc: 'Prompt user and run else statement if declined', inputs: ['prompt', 'else_stmt'], outputs: ['exec'], color: '#f59e0b', defaultValues: {prompt: '"Delete all logs? (y/N)"', else_stmt: 'exit'} }
+            ],
+            'Registry & Shortcuts': [
+                { name: 'make shortcut', desc: 'Create desktop/start menu shortcut', inputs: ['name', 'target', 'location'], outputs: ['exec'], color: '#0f766e', defaultValues: {name: '"My App"', target: '"C:/Program Files/MyApp/app.exe"', location: 'desktop'} },
+                { name: 'registry set', desc: 'Write Windows registry value', inputs: ['path', 'value_name', 'value'], outputs: ['exec'], color: '#0f766e', defaultValues: {path: 'HKCU\\Software\\MyApp', value_name: 'Theme', value: '"Dark"'} },
+                { name: 'registry get', desc: 'Read Windows registry value', inputs: ['path', 'value_name', 'var'], outputs: ['exec'], color: '#0f766e', defaultValues: {path: 'HKCU\\Software\\MyApp', value_name: 'Theme', var: 'theme'} },
+                { name: 'registry exists', desc: 'Check registry key/value exists', inputs: ['path', 'value_name', 'var'], outputs: ['exec'], color: '#0f766e', defaultValues: {path: 'HKCU\\Software\\MyApp', value_name: '', var: 'installed'} },
+                { name: 'registry delete', desc: 'Delete registry key or value', inputs: ['path', 'value_name'], outputs: ['exec'], color: '#b91c1c', defaultValues: {path: 'HKCU\\Software\\MyApp', value_name: 'Theme'} }
+            ],
+            'Packages': [
+                { name: 'install_package', desc: 'Install package via package manager', inputs: ['manager', 'package'], outputs: ['exec'], color: '#9333ea', defaultValues: {manager: 'winget', package: '"python"'} }
             ],
             'System Info': [
                 { name: 'system_cpu', desc: 'Get CPU usage %', inputs: ['var'], outputs: ['exec'], color: '#0ea5e9', defaultValues: {var: 'cpuUsage'} },
@@ -266,11 +293,26 @@
                 { name: 'concat', desc: 'Concatenate strings', inputs: ['out', 'a', 'b'], outputs: ['exec'], color: '#64748b', defaultValues: {out: 'result', a: '"Hello"', b: '" World"'} },
                 { name: 'split', desc: 'Split string', inputs: ['out', 'str', 'sep'], outputs: ['exec'], color: '#64748b', defaultValues: {out: 'parts', str: '"a,b,c"', sep: '","'} },
                 { name: 'replace', desc: 'Replace in string', inputs: ['out', 'str', 'from', 'to'], outputs: ['exec'], color: '#64748b', defaultValues: {out: 'result', str: '"hello"', from: '"h"', to: '"H"'} },
+                { name: 'list_add', desc: 'Append value to list variable', inputs: ['list', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {list: 'items', value: '"apple"'} },
+                { name: 'list_get_expr', desc: 'result = list_get(items, index)', inputs: ['out', 'list', 'index'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'firstItem', list: 'items', index: '0'} },
+                { name: 'list_length_expr', desc: 'result = list_length(items)', inputs: ['out', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'itemCount', value: 'items'} },
+                { name: 'split_expr', desc: 'result = split(value, sep)', inputs: ['out', 'value', 'sep'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'parts', value: '"a,b,c"', sep: '","'} },
                 { name: 'length_expr', desc: 'result = length(value)', inputs: ['out', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'lenValue', value: '"hello"'} },
                 { name: 'trim_expr', desc: 'result = trim(value)', inputs: ['out', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'cleanText', value: '"  hello  "'} },
                 { name: 'lower_expr', desc: 'result = lower(value)', inputs: ['out', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'lowerText', value: '"Hello"'} },
                 { name: 'upper_expr', desc: 'result = upper(value)', inputs: ['out', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'upperText', value: '"Hello"'} },
-                { name: 'replace_expr', desc: 'result = replace(value, from, to)', inputs: ['out', 'value', 'from', 'to'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'newText', value: '"hello"', from: '"h"', to: '"H"'} }
+                { name: 'replace_expr', desc: 'result = replace(value, from, to)', inputs: ['out', 'value', 'from', 'to'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'newText', value: '"hello"', from: '"h"', to: '"H"'} },
+                { name: 'contains_expr', desc: 'result = contains(text, value)', inputs: ['out', 'text', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'hasWord', text: '"hello world"', value: '"world"'} },
+                { name: 'contains_case_expr', desc: 'result = contains_case(text, value)', inputs: ['out', 'text', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'exactWord', text: '"Hello"', value: '"Hell"'} },
+                { name: 'notcontains_expr', desc: 'result = notcontains(text, value)', inputs: ['out', 'text', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'missingWord', text: '"hello"', value: '"bye"'} },
+                { name: 'startswith_expr', desc: 'result = startswith(text, prefix)', inputs: ['out', 'text', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'startsOk', text: '"report.pdf"', value: '"rep"'} },
+                { name: 'endswith_expr', desc: 'result = endswith(text, suffix)', inputs: ['out', 'text', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'endsOk', text: '"report.pdf"', value: '".pdf"'} },
+                { name: 'extension_expr', desc: 'result = extension(filename)', inputs: ['out', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'ext', value: '"report.pdf"'} },
+                { name: 'read_file_expr', desc: 'result = read_file(path)', inputs: ['out', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'content', value: '"notes.txt"'} },
+                { name: 'get_env_expr', desc: 'result = get_env(name)', inputs: ['out', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'appHome', value: '"MY_APP_HOME"'} },
+                { name: 'is_running_expr', desc: 'result = is_running(process)', inputs: ['out', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'running', value: '"notepad.exe"'} },
+                { name: 'subscript_get_expr', desc: 'result = cfg[\"key\"]', inputs: ['out', 'expr'], outputs: ['exec'], color: '#475569', defaultValues: {out: 'value', expr: 'cfg[\"version\"]'} },
+                { name: 'subscript_set', desc: 'cfg[\"key\"] = value', inputs: ['target', 'value'], outputs: ['exec'], color: '#475569', defaultValues: {target: 'cfg[\"version\"]', value: '"2.0"'} }
             ],
             'Arithmetic': [
                 { name: 'add',      desc: 'result = a + b',   inputs: ['result', 'a', 'b'], outputs: ['exec'], color: '#e879f9', defaultValues: {result: 'res', a: 'x', b: 'y'} },
@@ -851,14 +893,12 @@
         function parseScript(text) {
             const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
             const parsed = [];
-            
-            // Find all command definitions
+
             const allCommands = [];
             for (const cmds of Object.values(COMMANDS)) {
                 allCommands.push(...cmds);
             }
 
-            // Quote-aware tokenizer: keeps "quoted strings" as single tokens
             function tokenize(line) {
                 const tokens = [];
                 let current = '';
@@ -870,7 +910,9 @@
                         current += ch;
                         if (ch === quoteChar) inQuote = false;
                     } else if (ch === '"' || ch === "'") {
-                        inQuote = true; quoteChar = ch; current += ch;
+                        inQuote = true;
+                        quoteChar = ch;
+                        current += ch;
                     } else if (ch === ' ' || ch === '\t') {
                         if (current) { tokens.push(current); current = ''; }
                     } else {
@@ -880,111 +922,359 @@
                 if (current) tokens.push(current);
                 return tokens;
             }
-            
+
+            function splitArgs(raw) {
+                const parts = [];
+                let current = '';
+                let inQuote = false;
+                let quoteChar = '';
+                let depth = 0;
+                for (let i = 0; i < raw.length; i++) {
+                    const ch = raw[i];
+                    if (inQuote) {
+                        current += ch;
+                        if (ch === quoteChar) inQuote = false;
+                    } else if (ch === '"' || ch === "'") {
+                        inQuote = true;
+                        quoteChar = ch;
+                        current += ch;
+                    } else if (ch === '(') {
+                        depth++;
+                        current += ch;
+                    } else if (ch === ')') {
+                        depth = Math.max(0, depth - 1);
+                        current += ch;
+                    } else if (ch === ',' && depth === 0) {
+                        parts.push(current.trim());
+                        current = '';
+                    } else {
+                        current += ch;
+                    }
+                }
+                if (current.trim()) parts.push(current.trim());
+                return parts;
+            }
+
+            function findCommand(line) {
+                const matches = allCommands.filter(c => line === c.name || line.startsWith(c.name + ' '));
+                matches.sort((a, b) => b.name.length - a.name.length);
+                return matches[0] || null;
+            }
+
             for (const line of lines) {
                 const tokens = tokenize(line);
                 const cmdName = tokens[0];
 
-                // Handle global_variable / local_variable with " = " syntax from code generator
                 if ((cmdName === 'global_variable' || cmdName === 'local_variable') && tokens[1] === '=') {
-                    const val = tokens.slice(2).join(' ');
-                    parsed.push({ type: cmdName, color: '#14b8a6', outputs: ['exec'], inputs: { names: val } });
+                    parsed.push({ type: cmdName, color: '#14b8a6', outputs: ['exec'], inputs: { names: tokens.slice(2).join(' ') } });
                     continue;
                 }
-                
-                // Find matching command
-                const cmd = allCommands.find(c => c.name === cmdName);
+
+                const cmd = findCommand(line);
                 if (cmd) {
-                    const node = {
-                        type: cmd.name,
-                        color: cmd.color,
-                        outputs: cmd.outputs || [],
-                        inputs: {}
-                    };
-                    
-                    // Parse inputs with quote-aware tokens; last input captures remaining tokens
+                    const node = { type: cmd.name, color: cmd.color, outputs: cmd.outputs || [], inputs: {} };
+                    const remainder = line === cmd.name ? '' : line.slice(cmd.name.length).trim();
+                    const remTokens = tokenize(remainder);
+
                     if (cmd.name === 'loop') {
-                        const remainder = tokens.slice(1).join(' ');
                         const loopMatch = remainder.match(/^(.*?)\s+as\s+(\w+)$/);
                         node.inputs.expr = loopMatch ? loopMatch[1] : remainder;
                         node.inputs.index = loopMatch ? loopMatch[2] : '';
+                    } else if (cmd.name === 'for_each') {
+                        const m = remainder.match(/^(\w+)\s+in\s+(.+?)(?:\s+(older_than|newer_than)\s+\d+(?:\.\d+)?\s+(?:second|seconds|minute|minutes|hour|hours|day|days|month|months|year|years))?$/);
+                        if (m) {
+                            node.inputs.var = m[1];
+                            node.inputs.items = m[2].trim();
+                            node.inputs.age_filter = remainder.slice((m[1] + ' in ' + m[2]).length).trim();
+                        } else {
+                            const mIn = remainder.match(/^(\w+_in)\s+(.+)$/);
+                            if (mIn) {
+                                node.inputs.var = mIn[1];
+                                node.inputs.items = mIn[2].trim();
+                                node.inputs.age_filter = '';
+                            }
+                        }
+                    } else if (cmd.name === 'for_each_line') {
+                        const m = remainder.match(/^(\w+)\s+in\s+(.+)$/);
+                        if (m) {
+                            node.inputs.var = m[1];
+                            node.inputs.file = m[2].trim();
+                        }
+                    } else if (cmd.name === 'make file') {
+                        const m = remainder.match(/^(.+?)(?:\s+with\s+(.+))?$/);
+                        if (m) {
+                            node.inputs.path = m[1].trim();
+                            node.inputs.content = (m[2] || '').trim();
+                        }
+                    } else if (cmd.name === 'make shortcut') {
+                        const m = remainder.match(/^(.+?)\s+to\s+(.+?)(?:\s+on\s+(desktop|startmenu|programs|start\s*menu))?$/i);
+                        if (m) {
+                            node.inputs.name = m[1].trim();
+                            node.inputs.target = m[2].trim();
+                            node.inputs.location = (m[3] || 'desktop').replace(/\s+/g, '').toLowerCase();
+                        }
+                    } else if (['download', 'upload', 'copy', 'move', 'write', 'append', 'zip'].includes(cmd.name)) {
+                        const m = remainder.match(/^(.+?)\s+to\s+(.+)$/);
+                        if (m) {
+                            if (cmd.name === 'download') {
+                                node.inputs.url = m[1].trim();
+                                node.inputs.path = m[2].trim();
+                            } else if (cmd.name === 'upload') {
+                                node.inputs.path = m[1].trim();
+                                node.inputs.url = m[2].trim();
+                            } else if (cmd.name === 'copy' || cmd.name === 'move') {
+                                node.inputs.src = m[1].trim();
+                                node.inputs.dst = m[2].trim();
+                            } else if (cmd.name === 'write' || cmd.name === 'append') {
+                                node.inputs.text = m[1].trim();
+                                node.inputs.path = m[2].trim();
+                            } else if (cmd.name === 'zip') {
+                                node.inputs.source = m[1].trim();
+                                node.inputs.zipfile = m[2].trim();
+                            }
+                        }
+                    } else if (cmd.name === 'read') {
+                        const m = remainder.match(/^(\w+)\s+from\s+(.+)$/);
+                        if (m) {
+                            node.inputs.var = m[1];
+                            node.inputs.path = m[2].trim();
+                        }
+                    } else if (cmd.name === 'read_content') {
+                        const m = remainder.match(/^(.+?)\s+into\s+(\w+)$/);
+                        if (m) {
+                            node.inputs.path = m[1].trim();
+                            node.inputs.var = m[2];
+                        }
+                    } else if (cmd.name === 'json_read' || cmd.name === 'csv_read') {
+                        const m = remainder.match(/^(.+?)\s+to\s+(\w+)$/);
+                        if (m) {
+                            node.inputs.path = m[1].trim();
+                            node.inputs.var = m[2];
+                        }
+                    } else if (cmd.name === 'json_write' || cmd.name === 'csv_write') {
+                        const m = remainder.match(/^(\w+)\s+to\s+(.+)$/);
+                        if (m) {
+                            node.inputs.var = m[1];
+                            node.inputs.path = m[2].trim();
+                        }
+                    } else if (cmd.name === 'json_get') {
+                        const m = remainder.match(/^(\w+)\s+(.+?)\s+to\s+(\w+)$/);
+                        if (m) {
+                            node.inputs.var = m[1];
+                            node.inputs.key = m[2].trim();
+                            node.inputs.result = m[3];
+                        }
+                    } else if (cmd.name === 'json_set') {
+                        if (remTokens.length >= 3) {
+                            node.inputs.var = remTokens[0];
+                            node.inputs.key = remTokens[1];
+                            node.inputs.value = remainder.slice(remTokens[0].length + remTokens[1].length).trim();
+                        }
+                    } else if (cmd.name === 'csv_get') {
+                        const m = remainder.match(/^(\w+)\s+row\s+(\d+)\s+(.+?)\s+to\s+(\w+)$/);
+                        if (m) {
+                            node.inputs.var = m[1];
+                            node.inputs.row = m[2];
+                            node.inputs.col = m[3].trim();
+                            node.inputs.result = m[4];
+                        }
+                    } else if (cmd.name === 'unzip') {
+                        const m = remainder.match(/^(.+?)(?:\s+to\s+(.+))?$/);
+                        if (m) {
+                            node.inputs.zipfile = m[1].trim();
+                            node.inputs.dest = (m[2] || '').trim();
+                        }
+                    } else if (cmd.name === 'execute_command') {
+                        node.inputs.command = remTokens[0] || '';
+                        node.inputs.args = remTokens.slice(1).join(' ');
+                    } else if (cmd.name === 'path add' || cmd.name === 'path remove') {
+                        if (remainder.startsWith('--system ')) {
+                            node.inputs.scope = '--system';
+                            node.inputs.path = remainder.slice(9).trim();
+                        } else {
+                            node.inputs.scope = '';
+                            node.inputs.path = remainder;
+                        }
+                    } else if (cmd.name === 'script_path add' || cmd.name === 'script_path remove' || cmd.name === 'use' || cmd.name === 'run_from_web') {
+                        node.inputs[cmd.inputs[0]] = remainder;
+                    } else if (cmd.name === 'set_env') {
+                        const m = remainder.match(/^(.+?)\s+to\s+(.+)$/);
+                        if (m) {
+                            node.inputs.name = m[1].trim();
+                            node.inputs.value = m[2].trim();
+                        }
+                    } else if (cmd.name === 'require_admin') {
+                        node.inputs.message = remainder;
+                    } else if (cmd.name === 'confirm') {
+                        const m = remainder.match(/^(.+?)\s+else\s+(.+)$/);
+                        node.inputs.prompt = m ? m[1].trim() : remainder;
+                        node.inputs.else_stmt = m ? m[2].trim() : '';
+                    } else if (cmd.name === 'list_add') {
+                        node.inputs.list = remTokens[0] || '';
+                        node.inputs.value = remTokens.slice(1).join(' ');
+                    } else if (cmd.name === 'install_package') {
+                        const m = remainder.match(/^from\s+(\w[\w-]*)\s+(.+)$/);
+                        if (m) {
+                            node.inputs.manager = m[1];
+                            node.inputs.package = m[2].trim();
+                        }
+                    } else if (cmd.name.startsWith('registry ')) {
+                        const sub = cmd.name.slice('registry '.length);
+                        if (sub === 'set' && remTokens.length >= 3) {
+                            node.inputs.path = remTokens[0];
+                            node.inputs.value_name = remTokens[1];
+                            node.inputs.value = remainder.slice(remTokens[0].length + remTokens[1].length).trim();
+                        } else if (sub === 'get') {
+                            const m = remainder.match(/^(\S+)\s+(\S+)\s+to\s+(\w+)$/);
+                            if (m) {
+                                node.inputs.path = m[1];
+                                node.inputs.value_name = m[2];
+                                node.inputs.var = m[3];
+                            }
+                        } else if (sub === 'exists') {
+                            const m = remainder.match(/^(\S+)(?:\s+(\S+))?\s+to\s+(\w+)$/);
+                            if (m) {
+                                node.inputs.path = m[1];
+                                node.inputs.value_name = m[2] || '';
+                                node.inputs.var = m[3];
+                            }
+                        } else if (sub === 'delete') {
+                            node.inputs.path = remTokens[0] || '';
+                            node.inputs.value_name = remTokens[1] || '';
+                        }
                     } else if (cmd.inputs && cmd.inputs.length > 0) {
                         if (cmd.inputs.length === 1) {
-                            node.inputs[cmd.inputs[0]] = tokens.slice(1).join(' ');
+                            node.inputs[cmd.inputs[0]] = remainder;
                         } else {
                             cmd.inputs.forEach((iname, idx) => {
                                 if (idx === cmd.inputs.length - 1) {
-                                    node.inputs[iname] = tokens.slice(1 + idx).join(' ') || '';
+                                    node.inputs[iname] = remTokens.slice(idx).join(' ') || '';
                                 } else {
-                                    node.inputs[iname] = tokens[1 + idx] || '';
+                                    node.inputs[iname] = remTokens[idx] || '';
                                 }
                             });
                         }
                     }
                     parsed.push(node);
-                } else {
-                    // Handle variable declarations and arithmetic assignments
-                    if (line.includes(' = ')) {
-                        const eqIdx = line.indexOf(' = ');
-                        const lhs = line.slice(0, eqIdx).trim();
-                        const rhs = line.slice(eqIdx + 3).trim();
-                        if (lhs === 'global_variable') {
-                            parsed.push({ type: 'global_variable', color: '#14b8a6', outputs: ['exec'], inputs: { names: rhs } });
-                        } else if (lhs === 'local_variable') {
-                            parsed.push({ type: 'local_variable', color: '#14b8a6', outputs: ['exec'], inputs: { names: rhs } });
+                    continue;
+                }
+
+                if (line.includes(' = ')) {
+                    const eqIdx = line.indexOf(' = ');
+                    const lhs = line.slice(0, eqIdx).trim();
+                    const rhs = line.slice(eqIdx + 3).trim();
+                    if (lhs === 'global_variable') {
+                        parsed.push({ type: 'global_variable', color: '#14b8a6', outputs: ['exec'], inputs: { names: rhs } });
+                    } else if (lhs === 'local_variable') {
+                        parsed.push({ type: 'local_variable', color: '#14b8a6', outputs: ['exec'], inputs: { names: rhs } });
+                    } else {
+                        let arithType = null, a = '', b = '';
+                        const binOps = [
+                            { op: ' ** ', type: 'pow' },
+                            { op: ' // ', type: 'floordiv' },
+                            { op: ' + ',  type: 'add' },
+                            { op: ' - ',  type: 'sub' },
+                            { op: ' * ',  type: 'mul' },
+                            { op: ' / ',  type: 'div' },
+                            { op: ' % ',  type: 'mod' },
+                        ];
+                        for (const {op, type} of binOps) {
+                            const i = rhs.indexOf(op);
+                            if (i !== -1) { arithType = type; a = rhs.slice(0, i).trim(); b = rhs.slice(i + op.length).trim(); break; }
+                        }
+                        if (!arithType && rhs.startsWith('-')) {
+                            arithType = 'neg';
+                            a = rhs.slice(1).trim();
+                        }
+                        if (!arithType && rhs.startsWith('abs(') && rhs.endsWith(')')) {
+                            arithType = 'abs';
+                            a = rhs.slice(4, -1).trim();
+                        }
+                        const fnMatch = rhs.match(/^(\w+)\((.*)\)$/);
+                        if (!arithType && fnMatch) {
+                            const fnName = fnMatch[1];
+                            const fnParts = splitArgs(fnMatch[2]);
+                            if (fnName === 'length' && fnParts.length >= 1) {
+                                parsed.push({ type: 'length_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0] } });
+                                continue;
+                            }
+                            if (fnName === 'trim' && fnParts.length >= 1) {
+                                parsed.push({ type: 'trim_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0] } });
+                                continue;
+                            }
+                            if (fnName === 'lower' && fnParts.length >= 1) {
+                                parsed.push({ type: 'lower_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0] } });
+                                continue;
+                            }
+                            if (fnName === 'upper' && fnParts.length >= 1) {
+                                parsed.push({ type: 'upper_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0] } });
+                                continue;
+                            }
+                            if (fnName === 'replace' && fnParts.length >= 3) {
+                                parsed.push({ type: 'replace_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0], from: fnParts[1], to: fnParts.slice(2).join(', ') } });
+                                continue;
+                            }
+                            if (fnName === 'list_get' && fnParts.length >= 2) {
+                                parsed.push({ type: 'list_get_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, list: fnParts[0], index: fnParts[1] } });
+                                continue;
+                            }
+                            if (fnName === 'list_length' && fnParts.length >= 1) {
+                                parsed.push({ type: 'list_length_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0] } });
+                                continue;
+                            }
+                            if (fnName === 'split' && fnParts.length >= 2) {
+                                parsed.push({ type: 'split_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0], sep: fnParts[1] } });
+                                continue;
+                            }
+                            if (fnName === 'contains' && fnParts.length >= 2) {
+                                parsed.push({ type: 'contains_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, text: fnParts[0], value: fnParts[1] } });
+                                continue;
+                            }
+                            if (fnName === 'contains_case' && fnParts.length >= 2) {
+                                parsed.push({ type: 'contains_case_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, text: fnParts[0], value: fnParts[1] } });
+                                continue;
+                            }
+                            if (fnName === 'notcontains' && fnParts.length >= 2) {
+                                parsed.push({ type: 'notcontains_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, text: fnParts[0], value: fnParts[1] } });
+                                continue;
+                            }
+                            if (fnName === 'startswith' && fnParts.length >= 2) {
+                                parsed.push({ type: 'startswith_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, text: fnParts[0], value: fnParts[1] } });
+                                continue;
+                            }
+                            if (fnName === 'endswith' && fnParts.length >= 2) {
+                                parsed.push({ type: 'endswith_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, text: fnParts[0], value: fnParts[1] } });
+                                continue;
+                            }
+                            if (fnName === 'extension' && fnParts.length >= 1) {
+                                parsed.push({ type: 'extension_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0] } });
+                                continue;
+                            }
+                            if (fnName === 'read_file' && fnParts.length >= 1) {
+                                parsed.push({ type: 'read_file_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0] } });
+                                continue;
+                            }
+                            if (fnName === 'get_env' && fnParts.length >= 1) {
+                                parsed.push({ type: 'get_env_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0] } });
+                                continue;
+                            }
+                            if (fnName === 'is_running' && fnParts.length >= 1) {
+                                parsed.push({ type: 'is_running_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0] } });
+                                continue;
+                            }
+                        }
+                        if (!arithType && /^\w+(?:\s*\[[^\]]+\])+$/.test(rhs)) {
+                            parsed.push({ type: 'subscript_get_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, expr: rhs } });
+                            continue;
+                        }
+                        if (arithType) {
+                            const inputs = { result: lhs, a };
+                            if (b) inputs.b = b;
+                            parsed.push({ type: arithType, color: '#e879f9', outputs: ['exec'], inputs });
                         } else {
-                            // Detect arithmetic operator
-                            let arithType = null, a = '', b = '';
-                            const binOps = [
-                                { op: ' ** ', type: 'pow' },
-                                { op: ' // ', type: 'floordiv' },
-                                { op: ' + ',  type: 'add' },
-                                { op: ' - ',  type: 'sub' },
-                                { op: ' * ',  type: 'mul' },
-                                { op: ' / ',  type: 'div' },
-                                { op: ' % ',  type: 'mod' },
-                            ];
-                            for (const {op, type} of binOps) {
-                                const i = rhs.indexOf(op);
-                                if (i !== -1) { arithType = type; a = rhs.slice(0,i).trim(); b = rhs.slice(i+op.length).trim(); break; }
-                            }
-                            if (!arithType && rhs.startsWith('-')) {
-                                arithType = 'neg'; a = rhs.slice(1).trim();
-                            }
-                            if (!arithType && rhs.startsWith('abs(') && rhs.endsWith(')')) {
-                                arithType = 'abs'; a = rhs.slice(4,-1).trim();
-                            }
-                            const fnMatch = rhs.match(/^(\w+)\((.*)\)$/);
-                            if (!arithType && fnMatch) {
-                                const fnName = fnMatch[1];
-                                const fnParts = fnMatch[2].split(',').map(s => s.trim());
-                                if (fnName === 'length' && fnParts.length >= 1) {
-                                    parsed.push({ type: 'length_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0] } });
-                                    continue;
-                                }
-                                if (fnName === 'trim' && fnParts.length >= 1) {
-                                    parsed.push({ type: 'trim_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0] } });
-                                    continue;
-                                }
-                                if (fnName === 'lower' && fnParts.length >= 1) {
-                                    parsed.push({ type: 'lower_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0] } });
-                                    continue;
-                                }
-                                if (fnName === 'upper' && fnParts.length >= 1) {
-                                    parsed.push({ type: 'upper_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0] } });
-                                    continue;
-                                }
-                                if (fnName === 'replace' && fnParts.length >= 3) {
-                                    parsed.push({ type: 'replace_expr', color: '#475569', outputs: ['exec'], inputs: { out: lhs, value: fnParts[0], from: fnParts[1], to: fnParts.slice(2).join(', ') } });
-                                    continue;
-                                }
-                            }
-                            if (arithType) {
-                                const inputs = { result: lhs, a };
-                                if (b) inputs.b = b;
-                                parsed.push({ type: arithType, color: '#e879f9', outputs: ['exec'], inputs });
+                            if (/^\w+(?:\s*\[[^\]]+\])+$/.test(lhs)) {
+                                parsed.push({ type: 'subscript_set', color: '#475569', outputs: ['exec'], inputs: { target: lhs, value: rhs } });
                             } else {
-                                // Generic assignment node
                                 parsed.push({ type: 'set', color: '#14b8a6', outputs: ['exec'], inputs: { variable: lhs, value: rhs } });
                             }
                         }
@@ -1047,7 +1337,7 @@
         }
 
         function generateCode() {
-    const lines = ['# Generated by DoScript Visual IDE v0.6.9', ''];
+    const lines = ['# Generated by DoScript Visual IDE v0.6.13', ''];
     const visited = new Set();
     
     function traverse(node) {
@@ -1125,6 +1415,83 @@
                 const to = (node.inputs && node.inputs.to) ? node.inputs.to : '"H"';
                 line = `${out} = replace(${value}, ${from}, ${to})`;
 
+            } else if (node.type === 'list_get_expr') {
+                const out = (node.inputs && node.inputs.out) ? node.inputs.out : 'firstItem';
+                const list = (node.inputs && node.inputs.list) ? node.inputs.list : 'items';
+                const index = (node.inputs && node.inputs.index) ? node.inputs.index : '0';
+                line = `${out} = list_get(${list}, ${index})`;
+
+            } else if (node.type === 'list_length_expr') {
+                const out = (node.inputs && node.inputs.out) ? node.inputs.out : 'itemCount';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : 'items';
+                line = `${out} = list_length(${value})`;
+
+            } else if (node.type === 'split_expr') {
+                const out = (node.inputs && node.inputs.out) ? node.inputs.out : 'parts';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"a,b,c"';
+                const sep = (node.inputs && node.inputs.sep) ? node.inputs.sep : '","';
+                line = `${out} = split(${value}, ${sep})`;
+
+            } else if (node.type === 'contains_expr') {
+                const out = (node.inputs && node.inputs.out) ? node.inputs.out : 'hasWord';
+                const text = (node.inputs && node.inputs.text) ? node.inputs.text : '"hello world"';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"world"';
+                line = `${out} = contains(${text}, ${value})`;
+
+            } else if (node.type === 'contains_case_expr') {
+                const out = (node.inputs && node.inputs.out) ? node.inputs.out : 'exactWord';
+                const text = (node.inputs && node.inputs.text) ? node.inputs.text : '"Hello"';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"Hell"';
+                line = `${out} = contains_case(${text}, ${value})`;
+
+            } else if (node.type === 'notcontains_expr') {
+                const out = (node.inputs && node.inputs.out) ? node.inputs.out : 'missingWord';
+                const text = (node.inputs && node.inputs.text) ? node.inputs.text : '"hello"';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"bye"';
+                line = `${out} = notcontains(${text}, ${value})`;
+
+            } else if (node.type === 'startswith_expr') {
+                const out = (node.inputs && node.inputs.out) ? node.inputs.out : 'startsOk';
+                const text = (node.inputs && node.inputs.text) ? node.inputs.text : '"report.pdf"';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"rep"';
+                line = `${out} = startswith(${text}, ${value})`;
+
+            } else if (node.type === 'endswith_expr') {
+                const out = (node.inputs && node.inputs.out) ? node.inputs.out : 'endsOk';
+                const text = (node.inputs && node.inputs.text) ? node.inputs.text : '"report.pdf"';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '".pdf"';
+                line = `${out} = endswith(${text}, ${value})`;
+
+            } else if (node.type === 'extension_expr') {
+                const out = (node.inputs && node.inputs.out) ? node.inputs.out : 'ext';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"report.pdf"';
+                line = `${out} = extension(${value})`;
+
+            } else if (node.type === 'read_file_expr') {
+                const out = (node.inputs && node.inputs.out) ? node.inputs.out : 'content';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"notes.txt"';
+                line = `${out} = read_file(${value})`;
+
+            } else if (node.type === 'get_env_expr') {
+                const out = (node.inputs && node.inputs.out) ? node.inputs.out : 'appHome';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"MY_APP_HOME"';
+                line = `${out} = get_env(${value})`;
+
+            } else if (node.type === 'is_running_expr') {
+                const out = (node.inputs && node.inputs.out) ? node.inputs.out : 'running';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"notepad.exe"';
+                line = `${out} = is_running(${value})`;
+
+            } else if (node.type === 'subscript_get_expr') {
+                const out = (node.inputs && node.inputs.out) ? node.inputs.out : 'value';
+                const expr = (node.inputs && node.inputs.expr) ? node.inputs.expr : 'cfg["version"]';
+                line = `${out} = ${expr}`;
+
+            } else if (node.type === 'subscript_set') {
+                const target = (node.inputs && node.inputs.target) ? node.inputs.target : 'cfg["version"]';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"2.0"';
+                line = `${target} = ${value}`;
+
             } else if (node.type === 'download') {
                 // download "url" to "path"
                 const url = (node.inputs && node.inputs.url) ? node.inputs.url : '"https://example.com/file.zip"';
@@ -1184,41 +1551,48 @@
                 line = `append ${text} to ${path}`;
 
             } else if (node.type === 'json_read') {
-                // json_read var from "path"
-                const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'jsonData';
                 const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"data.json"';
-                line = `json_read ${v} from ${path}`;
+                const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'jsonData';
+                line = `json_read ${path} to ${v}`;
 
             } else if (node.type === 'json_write') {
-                // json_write var to "path"
                 const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'jsonData';
                 const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"output.json"';
                 line = `json_write ${v} to ${path}`;
 
             } else if (node.type === 'json_get') {
-                // json_get value from var key "keyname"
-                const result = (node.inputs && node.inputs.result) ? node.inputs.result : 'value';
                 const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'jsonData';
                 const key = (node.inputs && node.inputs.key) ? node.inputs.key : '"name"';
-                line = `json_get ${result} from ${v} key ${key}`;
+                const result = (node.inputs && node.inputs.result) ? node.inputs.result : 'value';
+                line = `json_get ${v} ${key} to ${result}`;
+
+            } else if (node.type === 'json_set') {
+                const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'jsonData';
+                const key = (node.inputs && node.inputs.key) ? node.inputs.key : '"user.name"';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"Alice"';
+                line = `json_set ${v} ${key} ${value}`;
 
             } else if (node.type === 'csv_read') {
-                // csv_read var from "path"
-                const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'csvData';
                 const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"data.csv"';
-                line = `csv_read ${v} from ${path}`;
+                const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'csvData';
+                line = `csv_read ${path} to ${v}`;
 
             } else if (node.type === 'csv_write') {
-                // csv_write var to "path"
                 const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'csvData';
                 const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"output.csv"';
                 line = `csv_write ${v} to ${path}`;
 
+            } else if (node.type === 'csv_get') {
+                const v = (node.inputs && node.inputs.var) ? node.inputs.var : 'csvData';
+                const row = (node.inputs && node.inputs.row) ? node.inputs.row : '0';
+                const col = (node.inputs && node.inputs.col) ? node.inputs.col : '"name"';
+                const result = (node.inputs && node.inputs.result) ? node.inputs.result : 'value';
+                line = `csv_get ${v} row ${row} ${col} to ${result}`;
+
             } else if (node.type === 'zip') {
-                // zip "zipfile" from "source"
-                const zipfile = (node.inputs && node.inputs.zipfile) ? node.inputs.zipfile : '"archive.zip"';
                 const source = (node.inputs && node.inputs.source) ? node.inputs.source : '"folder"';
-                line = `zip ${zipfile} from ${source}`;
+                const zipfile = (node.inputs && node.inputs.zipfile) ? node.inputs.zipfile : '"archive.zip"';
+                line = `zip ${source} to ${zipfile}`;
 
             } else if (node.type === 'unzip') {
                 // unzip "zipfile" to "dest"
@@ -1230,6 +1604,94 @@
                 const command = (node.inputs && node.inputs.command) ? node.inputs.command : '"git"';
                 const args = (node.inputs && node.inputs.args) ? node.inputs.args : '"status"';
                 line = `execute_command ${command}${args ? ' ' + args : ''}`;
+
+            } else if (node.type === 'set_env') {
+                const name = (node.inputs && node.inputs.name) ? node.inputs.name : '"MY_APP_HOME"';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"C:/MyApp"';
+                line = `set_env ${name} to ${value}`;
+
+            } else if (node.type === 'require_admin') {
+                const message = (node.inputs && node.inputs.message) ? node.inputs.message : '"Please run as Administrator."';
+                line = `require_admin ${message}`;
+
+            } else if (node.type === 'confirm') {
+                const prompt = (node.inputs && node.inputs.prompt) ? node.inputs.prompt : '"Delete all logs? (y/N)"';
+                const elseStmt = (node.inputs && node.inputs.else_stmt) ? node.inputs.else_stmt : 'exit';
+                line = elseStmt ? `confirm ${prompt} else ${elseStmt}` : `confirm ${prompt}`;
+
+            } else if (node.type === 'list_add') {
+                const list = (node.inputs && node.inputs.list) ? node.inputs.list : 'items';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"apple"';
+                line = `list_add ${list} ${value}`;
+
+            } else if (node.type === 'make shortcut') {
+                const name = (node.inputs && node.inputs.name) ? node.inputs.name : '"My App"';
+                const target = (node.inputs && node.inputs.target) ? node.inputs.target : '"C:/Program Files/MyApp/app.exe"';
+                const location = (node.inputs && node.inputs.location) ? node.inputs.location.trim() : 'desktop';
+                line = location && location !== 'desktop'
+                    ? `make shortcut ${name} to ${target} on ${location}`
+                    : `make shortcut ${name} to ${target}`;
+
+            } else if (node.type === 'registry set') {
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : 'HKCU\\Software\\MyApp';
+                const valueName = (node.inputs && node.inputs.value_name) ? node.inputs.value_name : 'Theme';
+                const value = (node.inputs && node.inputs.value) ? node.inputs.value : '"Dark"';
+                line = `registry set ${path} ${valueName} ${value}`;
+
+            } else if (node.type === 'registry get') {
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : 'HKCU\\Software\\MyApp';
+                const valueName = (node.inputs && node.inputs.value_name) ? node.inputs.value_name : 'Theme';
+                const variable = (node.inputs && node.inputs.var) ? node.inputs.var : 'theme';
+                line = `registry get ${path} ${valueName} to ${variable}`;
+
+            } else if (node.type === 'registry exists') {
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : 'HKCU\\Software\\MyApp';
+                const valueName = (node.inputs && node.inputs.value_name) ? node.inputs.value_name.trim() : '';
+                const variable = (node.inputs && node.inputs.var) ? node.inputs.var : 'installed';
+                line = valueName
+                    ? `registry exists ${path} ${valueName} to ${variable}`
+                    : `registry exists ${path} to ${variable}`;
+
+            } else if (node.type === 'registry delete') {
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : 'HKCU\\Software\\MyApp';
+                const valueName = (node.inputs && node.inputs.value_name) ? node.inputs.value_name.trim() : '';
+                line = valueName ? `registry delete ${path} ${valueName}` : `registry delete ${path}`;
+
+            } else if (node.type === 'install_package') {
+                const manager = (node.inputs && node.inputs.manager) ? node.inputs.manager : 'winget';
+                const pkg = (node.inputs && node.inputs.package) ? node.inputs.package : '"python"';
+                line = `install_package from ${manager} ${pkg}`;
+
+            } else if (node.type === 'use') {
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"files.do"';
+                line = `use ${path}`;
+
+            } else if (node.type === 'run_from_web') {
+                const path = (node.inputs && node.inputs.path) ? node.inputs.path : '"cleaner.do"';
+                line = `run_from_web ${path}`;
+
+            } else if (node.type === 'make a_command') {
+                const name = (node.inputs && node.inputs.name) ? node.inputs.name : 'print_separator';
+                line = `make a_command ${name}`;
+
+            } else if (node.type === 'for_each') {
+                const varName = (node.inputs && node.inputs.var) ? node.inputs.var.trim() : 'item';
+                const items = (node.inputs && node.inputs.items) ? node.inputs.items.trim() : 'myList';
+                const ageFilter = (node.inputs && node.inputs.age_filter) ? node.inputs.age_filter.trim() : '';
+                if (varName.includes('_in')) {
+                    line = `for_each ${varName} ${items}${ageFilter ? ' ' + ageFilter : ''}`;
+                } else {
+                    line = `for_each ${varName} in ${items}${ageFilter ? ' ' + ageFilter : ''}`;
+                }
+
+            } else if (node.type === 'for_each_line') {
+                const varName = (node.inputs && node.inputs.var) ? node.inputs.var : 'line';
+                const file = (node.inputs && node.inputs.file) ? node.inputs.file : '"data.txt"';
+                line = `for_each_line ${varName} in ${file}`;
+
+            } else if (node.type === 'catch') {
+                const errorType = (node.inputs && node.inputs.error_type) ? node.inputs.error_type.trim() : '';
+                line = errorType ? `catch ${errorType}` : 'catch';
 
             } else if (node.type === 'loop') {
                 const expr = (node.inputs && node.inputs.expr) ? node.inputs.expr : 'forever';
