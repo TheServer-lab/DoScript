@@ -253,3 +253,8 @@ The repository includes step-by-step lessons covering:
 **Server-Lab Open-Control License (SOCL) 1.0**
 
 See `LICENSE`
+## Quick Install
+Run this in command prompt:
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/TheServer-lab/DoScript/main/install.ps1 | iex"
+Or this in powershell:
+irm https://raw.githubusercontent.com/TheServer-lab/DoScript/main/install.ps1 | iex
