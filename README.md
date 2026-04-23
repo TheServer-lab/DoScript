@@ -258,3 +258,12 @@ Run this in your terminal:
 ```
 winget install doscript
 ```
+alternatively:
+Run this in command prompt:
+```
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/TheServer-lab/DoScript/main/install.ps1 | iex"
+```
+Or this in powershell:
+```
+irm https://raw.githubusercontent.com/TheServer-lab/DoScript/main/install.ps1
+```
