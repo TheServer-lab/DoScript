@@ -265,5 +265,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 ```
 Or this in powershell:
 ```
-irm https://raw.githubusercontent.com/TheServer-lab/DoScript/main/install.ps1
+irm https://raw.githubusercontent.com/TheServer-lab/DoScript/main/install.ps1 | iex
 ```
