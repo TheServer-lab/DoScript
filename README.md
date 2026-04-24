@@ -3,7 +3,7 @@
 Run real automation with commands that read like instructions.
 
 ```bash
-do do https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/chromebootstrap.do
+ do https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/chromebootstrap.do
 ```
 
 👉 Installs a full developer setup in one command.
