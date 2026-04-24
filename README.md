@@ -186,12 +186,6 @@ Included in this repo:
 winget install doscript
 ```
 
-### Scoop
-
-```bash
-scoop install doscript
-```
-
 ### Chocolatey
 
 ```bash
