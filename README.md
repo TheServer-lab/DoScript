@@ -29,7 +29,7 @@ choco install doscript
 ### Run your first script
 
 ```bash
-do https://raw.githubusercontent.com/TheServer-lab/DoScript/main/examples/chrome.do
+do https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/chromebootstrap.do
 ```
 
 That’s it.
