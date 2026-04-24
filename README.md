@@ -1,12 +1,66 @@
-# DoScript — Human-Friendly Automation & Installer Language
+# DoScript — Automate Windows with Simple Scripts
 
-**DoScript** is a readable scripting language for automation, installers, deployment, and system tasks.
+Run real automation with commands that read like instructions.
 
-It is designed to feel like writing instructions instead of code:
-- easy to read
-- practical for real work
-- safe to test with `--dry-run`
-- powerful enough to build installers and standalone EXEs
+```bash
+do do https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/chromebootstrap.do
+```
+
+👉 Installs a full developer setup in one command.
+
+---
+
+## ⚡ Try it in 10 seconds
+
+### Install
+
+```bash
+winget install doscript
+```
+
+or:
+
+```bash
+choco install doscript
+```
+
+---
+
+### Run your first script
+
+```bash
+do https://raw.githubusercontent.com/TheServer-lab/DoScript/main/examples/chrome.do
+```
+
+That’s it.
+
+---
+
+## 💡 What can you do with DoScript?
+
+* 🖥️ Set up a new PC in one command
+* 🧑‍💻 Install a full developer environment instantly
+* 📦 Build your own installers
+* 📁 Automate file organization and cleanup
+* 🌐 Download and configure apps automatically
+* 🔗 Share automation scripts with a simple link
+
+---
+
+## ✨ Why DoScript?
+
+Most automation tools are powerful—but hard to read and write.
+
+DoScript focuses on:
+
+* ✅ Human-readable syntax
+* ✅ Built-in automation commands
+* ✅ Safe testing with `--dry-run`
+* ✅ No boilerplate or setup
+
+---
+
+## 🧠 Example
 
 ```doscript
 ask name "What's your project called?"
@@ -18,252 +72,150 @@ unzip '{temp}/{name}.zip' to '{name}'
 say 'Done! Your project is ready in {name}'
 ```
 
----
-
-## What DoScript is good at
-
-DoScript is built for the kinds of tasks people do every day:
-
-- creating and organizing files
-- downloading and extracting packages
-- writing installers
-- adding shortcuts and PATH entries
-- editing JSON, CSV, and text files
-- scanning folders and sorting files
-- running commands and checking system state
-- packaging scripts into standalone `.exe` files
+Reads like instructions. Runs like code.
 
 ---
 
-## Why DoScript?
+## 🔥 Real Use Cases
 
-| Feature | Batch | PowerShell | Python | DoScript |
-|---|---|---|---|---|
-| Beginner-friendly | ⚠️ | ❌ | ⚠️ | ✅ |
-| Human-readable syntax | ❌ | ❌ | ❌ | ✅ |
-| Built-in dry-run mode | ❌ | ❌ | ❌ | ✅ |
-| File automation | ⚠️ | ✅ | ✅ | ✅ |
-| HTTP / downloads built in | ❌ | ✅ | ✅ | ✅ |
-| Installers are easy to write | ⚠️ | ⚠️ | ⚠️ | ✅ |
-| Build scripts into EXEs | ❌ | ⚠️ | ⚠️ | ✅ |
-| Functions and modules | ❌ | ✅ | ✅ | ✅ |
-
----
-
-## Current version
-
-**DoScript v0.6.13**
-
-Notable features include:
-
-- `install_package from <manager> "<pkg>"`
-- `use` and `include` modules
-- JSON, CSV, archives, and network tools
-- `make shortcut`
-- registry support
-- `require_admin`
-- `confirm`
-- list operations
-- map and array subscripts
-- `do build` for standalone EXEs
-- built-in path variables like `downloads`, `desktop`, `documents`, `temp`, and `appdata`
-
----
-
-## Install
-
-### Windows users
-Download the latest release from the project releases page and run the bundled executable.
-
-### From source
-Requires **Python 3.8+**.
+### 🧑‍💻 Developer Setup
 
 ```bash
-python doscript.py myscript.do
+do devkit.do
 ```
+
+Installs:
+
+* Git
+* Python
+* Node.js
+* VS Code
 
 ---
 
-## Usage
+### 🎮 Gaming Setup
 
 ```bash
-do <script.do> [--dry-run] [--verbose] [args...]
+do gaming.do
 ```
 
-| Flag | What it does |
-|---|---|
-| `--dry-run` | Simulates destructive operations instead of executing them |
-| `--verbose` | Prints extra execution detail |
-| `arg1`…`arg32` | CLI arguments available inside the script |
+Installs:
+
+* Steam
+* Discord
+* GPU tools
 
 ---
 
-## Quick examples
-
-### Variables and output
-
-```doscript
-global_variable = name, age
-
-name = "Alice"
-age = 30
-
-say 'Hello, {name}! You are {age} years old.'
-ask answer "Continue? (y/n)"
-```
-
-### Control flow
-
-```doscript
-if age >= 18
-    say "Adult"
-else_if age >= 13
-    say "Teenager"
-else
-    say "Child"
-end_if
-```
-
-### Loops
-
-```doscript
-loop 3 as i
-    say 'Retry {i}'
-    wait 1
-end_loop
-```
-
-### File operations
-
-```doscript
-make folder "output"
-copy "report.pdf" to "backup/report.pdf"
-zip "output" to 'output_{today}.zip'
-```
-
-### Network
-
-```doscript
-try
-    download "https://example.com/app.zip" to "app.zip"
-    say "Download complete!"
-catch NetworkError
-    say "Check your connection and try again."
-end_try
-```
-
-### Functions
-
-```doscript
-function greet name
-    say 'Hello, {name}!'
-end_function
-
-greet("World")
-```
-
-### Lists
-
-```doscript
-global_variable = items
-items = split("apple,banana,mango", ",")
-
-list_add items "orange"
-say list_get(items, 0)
-say list_length(items)
-```
-
-### JSON
-
-```doscript
-json_read "config.json" to cfg
-json_set cfg "user.name" "Alice"
-json_write cfg to "config.json"
-```
-
-### Installers
-
-```doscript
-require_admin "Please run as Administrator."
-
-make folder "C:/MyApp"
-download "https://example.com/myapp.zip" to "{temp}/myapp.zip"
-unzip "{temp}/myapp.zip" to "C:/MyApp"
-make shortcut "MyApp" to "C:/MyApp/app.exe" on desktop
-path add "C:/MyApp/bin"
-say "Installation complete!"
-```
-
----
-
-## Safety model
-
-DoScript is designed to make mistakes easier to catch:
-
-- `--dry-run` previews destructive actions
-- `try/catch` handles file, network, process, and data errors
-- explicit commands like `delete`, `move`, and `path add` make intent clear
-- structured logging with `log`, `warn`, and `error` is built in
-
----
-
-## Build EXEs
-
-DoScript can compile `.do` scripts into standalone executables.
+### 🖥️ New PC Setup
 
 ```bash
-do build installer.do
-do build installer.do --onefile
-do build installer.do --onefile --windowed --icon app.ico
-do build installer.do --title "My App Installer" --output build/
+do newpc.do
 ```
 
-| Flag | Effect |
-|---|---|
-| `--onefile` | Single portable EXE |
-| `--windowed` | No console window |
-| `--icon <file>` | Application icon |
-| `--title <text>` | Runtime title |
-| `--output <dir>` | Output directory |
+Sets up:
 
-The generated EXE embeds the DoScript runtime and the script itself.
+* essential apps
+* system tweaks
+* folder structure
 
 ---
 
-## Learning resources
+## ⚔️ Why not PowerShell?
 
-The repository includes step-by-step lessons covering:
+Powerful—but complex.
 
-- basics
-- control flow
-- file operations
-- file iteration
-- functions and macros
-- network commands
-- installer patterns
-- common gotchas
-- strings and text helpers
-- safer command execution
-- newer features and workflow improvements
+|                             | PowerShell | DoScript |
+| --------------------------- | ---------- | -------- |
+| Easy to learn               | ❌          | ✅        |
+| Readable like plain English | ❌          | ✅        |
+| Built-in automation tools   | ⚠️         | ✅        |
+| Safe preview mode           | ❌          | ✅        |
+
+👉 DoScript is designed for **getting things done quickly**, not writing complex scripts.
 
 ---
 
-## License
+## 🛠️ Features
+
+* File and folder automation
+* Downloads and archives
+* JSON, CSV, and text editing
+* Registry and system tools
+* Installer creation
+* Shortcut and PATH management
+* Script-to-EXE compilation
+
+---
+
+## 🧪 Safe by design
+
+* `--dry-run` previews actions before executing
+* `try/catch` handles errors cleanly
+* explicit commands reduce mistakes
+* built-in logging (`log`, `warn`, `error`)
+
+---
+
+## 🚀 Build standalone EXEs
+
+```bash
+do build installer.do --onefile --icon app.ico
+```
+
+Turn scripts into distributable applications.
+
+---
+
+## 📚 Learn DoScript
+
+Included in this repo:
+
+* beginner lessons
+* real-world examples
+* installer patterns
+* common workflows
+
+---
+
+## 📦 Installation
+
+### WinGet
+
+```bash
+winget install doscript
+```
+
+### Scoop
+
+```bash
+scoop install doscript
+```
+
+### Chocolatey
+
+```bash
+choco install doscript
+```
+
+---
+
+## 🧾 License
 
 **Server-Lab Open-Control License (SOCL) 1.0**
 
-See `LICENSE`
-## Quick Install
-Run this in your terminal:
-```
-winget install doscript
-```
-alternatively:
-Run this in command prompt:
-```
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/TheServer-lab/DoScript/main/install.ps1 | iex"
-```
-Or this in powershell:
-```
-irm https://raw.githubusercontent.com/TheServer-lab/DoScript/main/install.ps1 | iex
-```
+---
+
+## ⭐ If this helped you
+
+Give the repo a star—it helps others discover DoScript.
+
+---
+
+# 💬 Final note
+
+DoScript isn’t trying to replace everything.
+
+It’s built for one thing:
+
+> **turning everyday tasks into simple, shareable commands**
