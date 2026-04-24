@@ -81,7 +81,7 @@ Reads like instructions. Runs like code.
 ### 🧑‍💻 Developer Setup
 
 ```bash
-do devkit.do
+do https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/developer.do
 ```
 
 Installs:
@@ -96,7 +96,7 @@ Installs:
 ### 🎮 Gaming Setup
 
 ```bash
-do gaming.do
+do https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/gaming.do
 ```
 
 Installs:
@@ -110,7 +110,7 @@ Installs:
 ### 🖥️ New PC Setup
 
 ```bash
-do newpc.do
+do https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/freshwindows.do
 ```
 
 Sets up:
