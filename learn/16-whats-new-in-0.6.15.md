@@ -29,7 +29,7 @@ And installed to:
 
 | OS | Default install path |
 |---|---|
-| Windows | `C:\Program Files (x86)\DoScript\modules\` |
+| Windows | `C:\Server-lab\DoScript\modules from C:\Program Files (x86)\DoScript\modules` |
 | macOS / Linux | `~/DoScript/modules/` |
 
 Override the destination with `--dir`:
