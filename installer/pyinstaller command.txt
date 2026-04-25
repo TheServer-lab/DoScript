@@ -1,4 +1,0 @@
-py -m PyInstaller --onefile ^
-  --icon=C:\Users\dasso\Downloads\DoScript-dev\installer\do.ico ^
-  --add-data "C:\Users\dasso\Downloads\DoScript-dev\doscript.py;." ^
-  C:\Users\dasso\Downloads\DoScript-dev\doscript.py
