@@ -75,7 +75,7 @@ Modules are fetched from GitHub and installed to:
 
 | OS | Install path |
 |---|---|
-| Windows | `C:\Server-lab\DoScript\modules` |
+| Windows | `C:\Server-lab\DoScript\modules\` |
 | macOS / Linux | `~/DoScript/modules/` |
 
 Override the destination with `--dir`:
@@ -101,7 +101,7 @@ use_module "datetime"
 ```
 
 It searches in order:
-1. `C:\Program Files (x86)\DoScript\modules\` (Windows) / `~/DoScript/modules/`
+1. `C:\Server-lab\DoScript\modules\` (Windows) / `~/DoScript/modules/`
 2. A `modules/` subfolder next to your script
 3. `~/DoScript/modules/` (fallback)
 
@@ -244,3 +244,22 @@ print_done()
 > **Want to publish?** Add your module to
 > [TheServer-lab/DoModule](https://github.com/TheServer-lab/DoModule)
 > and anyone with DoScript can install it with `install_module`.
+
+---
+
+## Module Reference
+
+All 8 official modules are documented in full in
+[`docs/modules.md`](../docs/modules.md), including every function
+signature, description, and a working code example for each module.
+
+| Module | What it provides |
+|---|---|
+| `math` | Rounding, clamping, factorial, Fibonacci, GCD/LCM |
+| `strings` | Padding, repetition, truncation, validation |
+| `files` | Path helpers, `ensure_folder`, `backup_file`, file size labels |
+| `datetime` | Greetings, weekday/month names, leap years, elapsed time |
+| `network` | Connectivity checks, URL encoding, HTTP status labels |
+| `system` | OS detection, process control, env vars, admin check |
+| `lists` | Search, sum, min/max/average, join, fill |
+| `cli` | Banners, step output, `✓`/`⚠`/`✗` indicators, prompts |
