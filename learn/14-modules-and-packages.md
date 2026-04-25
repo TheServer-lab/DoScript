@@ -75,7 +75,7 @@ Modules are fetched from GitHub and installed to:
 
 | OS | Install path |
 |---|---|
-| Windows | `C:\Program Files (x86)\DoScript\modules\` |
+| Windows | `C:\Server-lab\DoScript\modules` |
 | macOS / Linux | `~/DoScript/modules/` |
 
 Override the destination with `--dir`:
