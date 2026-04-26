@@ -180,12 +180,6 @@ Included in this repo:
 winget install doscript
 ```
 
-### Chocolatey
-
-```bash
-choco install doscript
-```
-
 ---
 
 ## 🧾 License
