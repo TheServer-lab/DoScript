@@ -18,12 +18,6 @@ do https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/ma
 winget install doscript
 ```
 
-or:
-
-```bash
-choco install doscript
-```
-
 ---
 
 ### Run your first script
