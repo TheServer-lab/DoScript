@@ -24,7 +24,7 @@ Hit the **Fork** button at the top of the [DoScript repository](https://github.c
 Clone your fork locally and make your changes:
 
 ```
-git clone https://github.com/YOUR_USERNAME/DoScript.git
+git clone https://github.com/TheServer-lab/DoScript.git
 cd DoScript
 ```
 
