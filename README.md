@@ -3,7 +3,7 @@
 Run real automation with commands that read like instructions.
 
 ```bash
-ds https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/developer.ds
+do https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/developer.do
 ```
 
 👉 Installs a full developer setup in one command.
@@ -23,7 +23,7 @@ winget install doscript
 ### Run your first script
 
 ```bash
-ds https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/chromebootstrap.ds
+do https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/chromebootstrap.do
 ```
 
 That’s it.
@@ -75,7 +75,7 @@ Reads like instructions. Runs like code.
 ### 🧑‍💻 Developer Setup
 
 ```bash
-ds https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/developer.ds
+do https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/developer.do
 ```
 
 Installs:
@@ -90,7 +90,7 @@ Installs:
 ### 🎮 Gaming Setup
 
 ```bash
-ds https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/gaming.ds
+do https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/gaming.do
 ```
 
 Installs:
@@ -104,7 +104,7 @@ Installs:
 ### 🖥️ New PC Setup
 
 ```bash
-ds https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/freshwindows.ds
+do https://raw.githubusercontent.com/TheServer-lab/DoScriptPackage/refs/heads/main/files/freshwindows.do
 ```
 
 Sets up:
@@ -154,7 +154,7 @@ Powerful—but complex.
 ## 🚀 Build standalone EXEs
 
 ```bash
-ds build installer.do --onefile --icon app.ico
+do build installer.do --onefile --icon app.ico
 ```
 
 Turn scripts into distributable applications.
