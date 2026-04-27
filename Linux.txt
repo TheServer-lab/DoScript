@@ -1,0 +1,3 @@
+sudo add-apt-repository ppa:rr1ck/doscript
+sudo apt update
+sudo apt install doscript
